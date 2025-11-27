@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   phone?: string;
   smsVerified?: boolean; // SMS verification status for messaging
+  // Customer-specific: blacklisted agent IDs (agents they don't want assigned)
+  blacklistedAgentIds?: string[];
 }
 
 // Property interface
@@ -74,13 +76,14 @@ export interface Appointment {
   /**
    * Appointment status flow:
    * - 'pending': Initial state after customer booking - awaiting agent confirmation
+   * - 'pending_approval': Agent was auto-assigned after rejection - awaiting customer approval
    * - 'accepted': Agent has confirmed the appointment
    * - 'rejected': Agent has declined the appointment
    * - 'scheduled': Appointment is confirmed and scheduled (legacy/alternative to accepted)
    * - 'completed': Appointment has been completed
    * - 'cancelled': Appointment was cancelled by customer or admin
    */
-  status: 'pending' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled';
+  status: 'pending' | 'pending_approval' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled';
   // Race logic fields
   hasViewingRights: boolean;
   hasPurchaseRights: boolean;
@@ -91,6 +94,9 @@ export interface Appointment {
   customerName?: string; // Cached customer name for display
   customerEmail?: string; // Cached customer email
   customerPhone?: string; // Cached customer phone
+  // Agent reassignment tracking
+  previousAgentId?: string; // Previous agent before rejection/reassignment
+  rejectionReason?: string; // Reason for rejection
 }
 
 // Message for appointment-specific messaging
@@ -107,7 +113,7 @@ export interface AppointmentMessage {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending';
+  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available';
   title: string;
   message: string;
   read: boolean;

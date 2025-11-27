@@ -20,6 +20,7 @@ interface AppContextType {
   agents: Agent[];
   getAgent: (id: string) => Agent | undefined;
   getAvailableAgents: () => Agent[];
+  getAvailableAgentsForCustomer: (customerId: string, date: string, startTime: string, endTime: string, excludeAgentIds?: string[]) => Agent[];
   toggleAgentVacation: (agentId: string) => void;
   updateAgentAvailability: (agentId: string, slotId: string, isBooked: boolean, bookingId?: string) => void;
   updateAgentSmsVerification: (agentId: string, verified: boolean) => void;
@@ -39,6 +40,8 @@ interface AppContextType {
   cancelAppointment: (id: string) => void;
   acceptAppointment: (id: string) => void;
   rejectAppointment: (id: string, reason?: string) => void;
+  approveNewAgent: (appointmentId: string) => void;
+  selectDifferentAgent: (appointmentId: string, newAgentId: string) => void;
   hasAgentConflict: (agentId: string, date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => boolean;
   getAgentsFreeForSlot: (date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => Agent[];
 
@@ -116,6 +119,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getAvailableAgents = useCallback(() => {
     return agents.filter(a => !a.isOnVacation);
   }, [agents]);
+
+  // Get available agents for a customer, excluding blacklisted and already-tried agents
+  const getAvailableAgentsForCustomer = useCallback((
+    customerId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    excludeAgentIds: string[] = []
+  ): Agent[] => {
+    const customer = users.find(u => u.id === customerId);
+    const blacklistedIds = customer?.blacklistedAgentIds || [];
+    
+    return agents.filter(agent => {
+      // Skip if on vacation
+      if (agent.isOnVacation) return false;
+      
+      // Skip if blacklisted by customer
+      if (blacklistedIds.includes(agent.id)) return false;
+      
+      // Skip if in exclude list (already tried agents)
+      if (excludeAgentIds.includes(agent.id)) return false;
+      
+      // Check if agent has availability for this slot
+      const hasSlotAvailable = agent.availability.some(slot => 
+        slot.date === date && 
+        slot.startTime === startTime && 
+        slot.endTime === endTime && 
+        !slot.isBooked
+      );
+      
+      // Check for conflicts with existing appointments
+      const hasConflict = appointments.filter(a => {
+        if (a.status === 'cancelled' || a.status === 'rejected') return false;
+        if (a.agentId !== agent.id) return false;
+        if (a.date !== date) return false;
+        return startTime < a.endTime && endTime > a.startTime;
+      }).length > 0;
+      
+      return hasSlotAvailable && !hasConflict;
+    });
+  }, [agents, users, appointments]);
 
   const toggleAgentVacation = useCallback((agentId: string) => {
     setAgents(prev => prev.map(a => 
@@ -361,26 +405,170 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [appointments, properties, addNotification]);
 
-  // Reject appointment
+  // Reject appointment - with auto-assignment of new agent
   const rejectAppointment = useCallback((id: string, reason?: string) => {
     const appointment = appointments.find(a => a.id === id);
     if (!appointment) return;
 
+    const property = properties.find(p => p.id === appointment.propertyId);
+    const currentAgentId = appointment.agentId;
+    const customer = users.find(u => u.id === appointment.customerId);
+    const blacklistedIds = customer?.blacklistedAgentIds || [];
+    
+    // Find available agents for auto-assignment (excluding current agent and blacklisted)
+    const availableAgents = agents.filter(agent => {
+      if (agent.id === currentAgentId) return false;
+      if (agent.isOnVacation) return false;
+      if (blacklistedIds.includes(agent.id)) return false;
+      
+      // Check if agent has availability for this slot
+      const hasSlotAvailable = agent.availability.some(slot => 
+        slot.date === appointment.date && 
+        slot.startTime === appointment.startTime && 
+        slot.endTime === appointment.endTime && 
+        !slot.isBooked
+      );
+      
+      // Check for conflicts
+      const hasConflict = appointments.filter(a => {
+        if (a.status === 'cancelled' || a.status === 'rejected') return false;
+        if (a.id === id) return false; // Exclude current appointment
+        if (a.agentId !== agent.id) return false;
+        if (a.date !== appointment.date) return false;
+        return appointment.startTime < a.endTime && appointment.endTime > a.startTime;
+      }).length > 0;
+      
+      return hasSlotAvailable && !hasConflict;
+    });
+
+    if (availableAgents.length > 0) {
+      // Auto-assign new agent - pick first available (or could be random)
+      const newAgent = availableAgents[0];
+      
+      setAppointments(prev => prev.map(a => 
+        a.id === id ? { 
+          ...a, 
+          status: 'pending_approval',
+          previousAgentId: currentAgentId,
+          agentId: newAgent.id,
+          rejectionReason: reason
+        } : a
+      ));
+
+      // Notify customer about rejection and new agent assignment
+      addNotification({
+        userId: appointment.customerId,
+        type: 'agent_reassigned',
+        title: 'Agent Reassigned',
+        message: `Your viewing request for ${property?.title || 'a property'} was declined by the previous agent.${reason ? ` Reason: ${reason}` : ''} A new agent (${newAgent.name}) has been assigned. Please approve or select a different agent.`,
+        read: false,
+        relatedId: id,
+      });
+
+      // Notify new agent about pending assignment
+      addNotification({
+        userId: newAgent.id,
+        type: 'booking_pending',
+        title: 'Pending Assignment',
+        message: `You have been assigned to a viewing for ${property?.title || 'a property'}, pending customer approval.`,
+        read: false,
+        relatedId: id,
+      });
+    } else {
+      // No available agents - mark as rejected and notify customer
+      setAppointments(prev => prev.map(a => 
+        a.id === id ? { 
+          ...a, 
+          status: 'rejected',
+          previousAgentId: currentAgentId,
+          rejectionReason: reason
+        } : a
+      ));
+
+      // Notify customer about rejection with no available agents
+      addNotification({
+        userId: appointment.customerId,
+        type: 'no_agents_available',
+        title: 'No Agents Available',
+        message: `Your viewing request for ${property?.title || 'a property'} was declined.${reason ? ` Reason: ${reason}` : ''} Unfortunately, no other agents are available for this time slot. Please select a different time.`,
+        read: false,
+        relatedId: id,
+      });
+    }
+  }, [appointments, properties, users, agents, addNotification]);
+
+  // Customer approves the newly assigned agent
+  const approveNewAgent = useCallback((appointmentId: string) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment || appointment.status !== 'pending_approval') return;
+
+    const property = properties.find(p => p.id === appointment.propertyId);
+    const agent = agents.find(a => a.id === appointment.agentId);
+
+    // Update status to pending (waiting for agent acceptance)
     setAppointments(prev => prev.map(a => 
-      a.id === id ? { ...a, status: 'rejected' } : a
+      a.id === appointmentId ? { ...a, status: 'pending' } : a
     ));
 
-    // Notify customer about rejection
-    const property = properties.find(p => p.id === appointment.propertyId);
+    // Notify agent about the booking
+    addNotification({
+      userId: appointment.agentId,
+      type: 'booking_new',
+      title: 'New Booking',
+      message: `You have a new property viewing for ${property?.title || 'a property'}. Customer has approved your assignment.`,
+      read: false,
+      relatedId: appointmentId,
+    });
+
+    // Notify customer that agent has been notified
     addNotification({
       userId: appointment.customerId,
-      type: 'booking_rejected',
-      title: 'Booking Declined',
-      message: `Your viewing request for ${property?.title || 'a property'} was declined.${reason ? ` Reason: ${reason}` : ''} Please select a different time or agent.`,
+      type: 'booking_pending',
+      title: 'Awaiting Agent Confirmation',
+      message: `${agent?.name || 'The agent'} has been notified of your viewing request for ${property?.title || 'a property'}.`,
       read: false,
-      relatedId: id,
+      relatedId: appointmentId,
     });
-  }, [appointments, properties, addNotification]);
+  }, [appointments, properties, agents, addNotification]);
+
+  // Customer selects a different agent (from available agents)
+  const selectDifferentAgent = useCallback((appointmentId: string, newAgentId: string) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+    if (appointment.status !== 'pending_approval' && appointment.status !== 'rejected') return;
+
+    const property = properties.find(p => p.id === appointment.propertyId);
+    const newAgent = agents.find(a => a.id === newAgentId);
+
+    // Update appointment with new agent and set to pending_approval
+    setAppointments(prev => prev.map(a => 
+      a.id === appointmentId ? { 
+        ...a, 
+        agentId: newAgentId,
+        status: 'pending'
+      } : a
+    ));
+
+    // Notify new agent about the booking
+    addNotification({
+      userId: newAgentId,
+      type: 'booking_new',
+      title: 'New Booking',
+      message: `You have been assigned to a property viewing for ${property?.title || 'a property'}`,
+      read: false,
+      relatedId: appointmentId,
+    });
+
+    // Notify customer
+    addNotification({
+      userId: appointment.customerId,
+      type: 'booking_pending',
+      title: 'Agent Selected',
+      message: `${newAgent?.name || 'Your selected agent'} has been notified of your viewing request for ${property?.title || 'a property'}.`,
+      read: false,
+      relatedId: appointmentId,
+    });
+  }, [appointments, properties, agents, addNotification]);
 
   // Messaging functions
   const getMessagesByAppointment = useCallback((appointmentId: string) => {
@@ -474,6 +662,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     agents,
     getAgent,
     getAvailableAgents,
+    getAvailableAgentsForCustomer,
     toggleAgentVacation,
     updateAgentAvailability,
     updateAgentSmsVerification,
@@ -489,6 +678,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cancelAppointment,
     acceptAppointment,
     rejectAppointment,
+    approveNewAgent,
+    selectDifferentAgent,
     hasAgentConflict,
     getAgentsFreeForSlot,
     messages,
