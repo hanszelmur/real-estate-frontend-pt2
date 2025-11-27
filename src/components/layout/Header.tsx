@@ -15,6 +15,9 @@ export default function Header() {
         : 'text-gray-300 hover:bg-blue-600 hover:text-white'
     }`;
 
+  // Admin dashboard path is undiscoverable from public UI
+  const adminPath = '/internal/admin/dashboard';
+
   return (
     <header className="bg-blue-800 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -53,9 +56,10 @@ export default function Header() {
                 Dashboard
               </Link>
             )}
+            {/* Admin link is NOT shown in public navigation - admins access via direct URL */}
             {currentUser?.role === 'admin' && (
-              <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>
-                Admin
+              <Link to={adminPath} className={navLinkClass(adminPath)}>
+                Admin Panel
               </Link>
             )}
 

@@ -24,6 +24,9 @@ function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="customer/dashboard" element={<CustomerDashboard />} />
             <Route path="agent/dashboard" element={<AgentDashboard />} />
+            {/* Admin dashboard on separate undiscoverable path */}
+            <Route path="internal/admin/dashboard" element={<AdminDashboard />} />
+            {/* Legacy path redirect for admin */}
             <Route path="admin/dashboard" element={<AdminDashboard />} />
           </Route>
         </Routes>
