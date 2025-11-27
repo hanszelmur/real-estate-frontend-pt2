@@ -37,13 +37,17 @@ export default function CustomerAppointmentModal({
   const customerSmsVerified = currentUser?.smsVerified ?? false;
 
   // Get available agents for selection (excluding current and blacklisted)
+  const excludeAgentIds = [
+    appointment.agentId,
+    ...(appointment.previousAgentId ? [appointment.previousAgentId] : [])
+  ];
   const availableAgents = currentUser 
     ? getAvailableAgentsForCustomer(
         currentUser.id,
         appointment.date,
         appointment.startTime,
         appointment.endTime,
-        [appointment.agentId, appointment.previousAgentId || ''].filter(Boolean)
+        excludeAgentIds
       )
     : [];
 
@@ -93,12 +97,15 @@ export default function CustomerAppointmentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         {/* Backdrop */}
         <div
           className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
           onClick={onClose}
+          role="button"
+          aria-label="Close modal"
+          tabIndex={-1}
         ></div>
 
         {/* Modal */}
@@ -106,7 +113,7 @@ export default function CustomerAppointmentModal({
           {/* Header */}
           <div className="bg-blue-800 px-6 py-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">Appointment Details</h2>
+              <h2 id="modal-title" className="text-xl font-semibold text-white">Appointment Details</h2>
               <button
                 onClick={onClose}
                 className="text-white hover:text-gray-200"

@@ -67,6 +67,10 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
           onClick={onClose}
+          onKeyDown={(e) => e.key === 'Escape' && onClose()}
+          role="button"
+          aria-label="Close chat"
+          tabIndex={0}
         />
       )}
 
@@ -75,6 +79,9 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
         className={`fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-drawer-title"
       >
         {/* Header */}
         <div className="bg-blue-800 px-4 py-4 flex items-center justify-between">
@@ -82,7 +89,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
             <svg className="w-6 h-6 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <h2 className="text-lg font-semibold text-white">Messages</h2>
+            <h2 id="chat-drawer-title" className="text-lg font-semibold text-white">Messages</h2>
           </div>
           <button
             onClick={onClose}
