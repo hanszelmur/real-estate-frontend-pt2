@@ -71,6 +71,15 @@ export interface Appointment {
   date: string;
   startTime: string;
   endTime: string;
+  /**
+   * Appointment status flow:
+   * - 'pending': Initial state after customer booking - awaiting agent confirmation
+   * - 'accepted': Agent has confirmed the appointment
+   * - 'rejected': Agent has declined the appointment
+   * - 'scheduled': Appointment is confirmed and scheduled (legacy/alternative to accepted)
+   * - 'completed': Appointment has been completed
+   * - 'cancelled': Appointment was cancelled by customer or admin
+   */
   status: 'pending' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled';
   // Race logic fields
   hasViewingRights: boolean;

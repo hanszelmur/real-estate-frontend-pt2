@@ -26,6 +26,7 @@ export default function AdminDashboard() {
   const [resolutionText, setResolutionText] = useState<string>('');
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [overrideError, setOverrideError] = useState<string | null>(null);
 
   // Redirect if not logged in as admin
   if (!currentUser || currentUser.role !== 'admin') {
@@ -57,10 +58,11 @@ export default function AdminDashboard() {
 
     // Check for double-booking
     if (hasAgentConflict(overrideAgentId, appointment.date, appointment.startTime, appointment.endTime, appointmentId)) {
-      alert('Cannot assign this agent - they have a conflicting appointment at this time.');
+      setOverrideError('Cannot assign this agent - they have a conflicting appointment at this time.');
       return;
     }
 
+    setOverrideError(null);
     createOverride(appointmentId, overrideAgentId, overrideReason);
     setSelectedAppointmentForOverride(null);
     setOverrideAgentId('');
@@ -264,6 +266,12 @@ export default function AdminDashboard() {
                             >
                               <h5 className="font-medium text-sm mb-2">Manual Override</h5>
                               
+                              {overrideError && (
+                                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                  <p className="text-sm text-red-700">{overrideError}</p>
+                                </div>
+                              )}
+                              
                               {availableAgentsForSlot.length === 0 ? (
                                 <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                                   <p className="text-sm text-red-700">
@@ -278,7 +286,10 @@ export default function AdminDashboard() {
                                     </label>
                                     <select
                                       value={overrideAgentId}
-                                      onChange={(e) => setOverrideAgentId(e.target.value)}
+                                      onChange={(e) => {
+                                        setOverrideAgentId(e.target.value);
+                                        setOverrideError(null);
+                                      }}
                                       className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm p-2 border"
                                     >
                                       <option value="">Select available agent...</option>
@@ -306,6 +317,7 @@ export default function AdminDashboard() {
                                         setSelectedAppointmentForOverride(null);
                                         setOverrideAgentId('');
                                         setOverrideReason('');
+                                        setOverrideError(null);
                                       }}
                                       className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-md"
                                     >
@@ -345,6 +357,7 @@ export default function AdminDashboard() {
                                 );
                                 setOverrideAgentId('');
                                 setOverrideReason('');
+                                setOverrideError(null);
                               }}
                               className="px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200"
                             >

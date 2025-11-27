@@ -65,7 +65,9 @@ export default function AgentDashboard() {
   };
 
   const handleSmsVerify = () => {
-    // In a real app, this would trigger SMS verification flow
+    // DEMO: In a production app, this would trigger an SMS verification flow
+    // with OTP code sent to the agent's phone number and validation.
+    // For this demo, verification is set to true immediately.
     updateAgentSmsVerification(agent.id, true);
   };
 

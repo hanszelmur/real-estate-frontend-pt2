@@ -41,6 +41,7 @@ export default function AppointmentDetailModal({
   const [notes, setNotes] = useState(appointment.notes || '');
   const [showMessaging, setShowMessaging] = useState(false);
   const [newMessage, setNewMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const messages = getMessagesByAppointment(appointment.id);
   const messagingEnabled = canMessage(appointment.id);
@@ -70,10 +71,11 @@ export default function AppointmentDetailModal({
     
     // Check for double-booking
     if (hasAgentConflict(overrideAgentId, appointment.date, appointment.startTime, appointment.endTime, appointment.id)) {
-      alert('Cannot assign this agent - they have a conflicting appointment at this time.');
+      setErrorMessage('Cannot assign this agent - they have a conflicting appointment at this time.');
       return;
     }
     
+    setErrorMessage(null);
     createOverride(appointment.id, overrideAgentId, overrideReason);
     setShowOverride(false);
     setOverrideAgentId('');
@@ -242,7 +244,10 @@ export default function AppointmentDetailModal({
                     </div>
                   </div>
                   <button
-                    onClick={() => setShowOverride(!showOverride)}
+                    onClick={() => {
+                      setShowOverride(!showOverride);
+                      setErrorMessage(null);
+                    }}
                     className="px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200"
                   >
                     Override Assignment
@@ -253,6 +258,12 @@ export default function AppointmentDetailModal({
                 {showOverride && (
                   <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
                     <h4 className="font-medium text-purple-900 mb-3">Manual Override</h4>
+                    
+                    {errorMessage && (
+                      <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700">{errorMessage}</p>
+                      </div>
+                    )}
                     
                     {availableAgentsForSlot.length === 0 ? (
                       <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -266,7 +277,10 @@ export default function AppointmentDetailModal({
                           <label className="block text-sm text-gray-700 mb-1">Select New Agent</label>
                           <select
                             value={overrideAgentId}
-                            onChange={(e) => setOverrideAgentId(e.target.value)}
+                            onChange={(e) => {
+                              setOverrideAgentId(e.target.value);
+                              setErrorMessage(null);
+                            }}
                             className="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 text-sm p-2 border"
                           >
                             <option value="">Select an available agent...</option>
