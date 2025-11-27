@@ -51,6 +51,7 @@ export const mockAgents: Agent[] = [
     salesCount: 15,
     soldProperties: ['prop-sold-1', 'prop-sold-2'],
     isOnVacation: false,
+    smsVerified: true,
     availability: generateAvailability(1, 14, [2, 5, 12]),
     latestRatings: [
       { id: 'rating-1', customerId: 'cust-1', customerName: 'John D.', rating: 5, comment: 'Excellent service!', date: formatDate(addDays(today, -5)) },
@@ -67,6 +68,7 @@ export const mockAgents: Agent[] = [
     salesCount: 12,
     soldProperties: ['prop-sold-3'],
     isOnVacation: false,
+    smsVerified: true,
     availability: generateAvailability(1, 14, [0, 8, 15]),
     latestRatings: [
       { id: 'rating-3', customerId: 'cust-3', customerName: 'Mike T.', rating: 5, comment: 'Great experience!', date: formatDate(addDays(today, -3)) },
@@ -83,6 +85,7 @@ export const mockAgents: Agent[] = [
     salesCount: 20,
     soldProperties: ['prop-sold-4', 'prop-sold-5', 'prop-sold-6'],
     isOnVacation: true, // On vacation - won't appear in customer choices
+    smsVerified: false,
     availability: generateAvailability(1, 14, []),
     latestRatings: [
       { id: 'rating-5', customerId: 'cust-5', customerName: 'Robert K.', rating: 5, comment: 'Best agent ever!', date: formatDate(addDays(today, -2)) },
@@ -98,6 +101,7 @@ export const mockAgents: Agent[] = [
     salesCount: 8,
     soldProperties: [],
     isOnVacation: false,
+    smsVerified: true,
     availability: generateAvailability(1, 14, [3, 9]),
     latestRatings: [
       { id: 'rating-6', customerId: 'cust-6', customerName: 'Emma S.', rating: 4, comment: 'Good service', date: formatDate(addDays(today, -7)) },
@@ -197,9 +201,9 @@ export const mockProperties: Property[] = [
 
 // Sample users
 export const mockUsers: User[] = [
-  { id: 'customer-1', name: 'Juan Dela Cruz', email: 'juan@email.com', role: 'customer', phone: '+63 901 234 5678' },
-  { id: 'customer-2', name: 'Maria Garcia', email: 'maria.g@email.com', role: 'customer', phone: '+63 902 345 6789' },
-  { id: 'admin-1', name: 'Admin User', email: 'admin@tesproperties.ph', role: 'admin', phone: '+63 999 888 7777' },
+  { id: 'customer-1', name: 'Juan Dela Cruz', email: 'juan@email.com', role: 'customer', phone: '+63 901 234 5678', smsVerified: true },
+  { id: 'customer-2', name: 'Maria Garcia', email: 'maria.g@email.com', role: 'customer', phone: '+63 902 345 6789', smsVerified: false },
+  { id: 'admin-1', name: 'Admin User', email: 'admin@tesproperties.ph', role: 'admin', phone: '+63 999 888 7777', smsVerified: true },
 ];
 
 // Sample appointments
@@ -212,10 +216,14 @@ export const mockAppointments: Appointment[] = [
     date: formatDate(addDays(today, 2)),
     startTime: '10:00',
     endTime: '11:00',
-    status: 'scheduled',
+    status: 'accepted',
     hasViewingRights: true,
     hasPurchaseRights: true, // First viewer
     createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    customerName: 'Juan Dela Cruz',
+    customerEmail: 'juan@email.com',
+    customerPhone: '+63 901 234 5678',
+    notes: 'Customer interested in long-term investment.',
   },
   {
     id: 'apt-2',
@@ -225,10 +233,13 @@ export const mockAppointments: Appointment[] = [
     date: formatDate(addDays(today, 3)),
     startTime: '14:00',
     endTime: '15:00',
-    status: 'scheduled',
+    status: 'pending',
     hasViewingRights: true,
     hasPurchaseRights: false, // Second viewer - viewing only
     createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+    customerName: 'Maria Garcia',
+    customerEmail: 'maria.g@email.com',
+    customerPhone: '+63 902 345 6789',
   },
 ];
 

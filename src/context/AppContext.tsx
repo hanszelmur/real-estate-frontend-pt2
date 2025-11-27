@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { User, Property, Agent, Appointment, Notification, AdminAlert, UserRole } from '../types';
+import type { User, Property, Agent, Appointment, Notification, AdminAlert, UserRole, AppointmentMessage } from '../types';
 import { mockUsers, mockProperties, mockAgents, mockAppointments, mockNotifications, mockAdminAlerts } from '../data/mockData';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -22,6 +22,12 @@ interface AppContextType {
   getAvailableAgents: () => Agent[];
   toggleAgentVacation: (agentId: string) => void;
   updateAgentAvailability: (agentId: string, slotId: string, isBooked: boolean, bookingId?: string) => void;
+  updateAgentSmsVerification: (agentId: string, verified: boolean) => void;
+
+  // Users
+  users: User[];
+  getUser: (id: string) => User | undefined;
+  updateUserSmsVerification: (userId: string, verified: boolean) => void;
 
   // Appointments
   appointments: Appointment[];
@@ -31,6 +37,16 @@ interface AppContextType {
   updateAppointment: (id: string, updates: Partial<Appointment>) => void;
   changeAgent: (appointmentId: string, newAgentId: string) => void;
   cancelAppointment: (id: string) => void;
+  acceptAppointment: (id: string) => void;
+  rejectAppointment: (id: string, reason?: string) => void;
+  hasAgentConflict: (agentId: string, date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => boolean;
+  getAgentsFreeForSlot: (date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => Agent[];
+
+  // Messages
+  messages: AppointmentMessage[];
+  getMessagesByAppointment: (appointmentId: string) => AppointmentMessage[];
+  sendMessage: (appointmentId: string, content: string) => void;
+  canMessage: (appointmentId: string) => boolean;
 
   // Notifications
   notifications: Notification[];
@@ -53,6 +69,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [adminAlerts, setAdminAlerts] = useState<AdminAlert[]>(mockAdminAlerts);
+  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [messages, setMessages] = useState<AppointmentMessage[]>([]);
 
   // Auth functions
   const login = useCallback((role: UserRole, userId?: string) => {
@@ -115,6 +133,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
             )
           }
         : a
+    ));
+  }, []);
+
+  const updateAgentSmsVerification = useCallback((agentId: string, verified: boolean) => {
+    setAgents(prev => prev.map(a => 
+      a.id === agentId ? { ...a, smsVerified: verified } : a
+    ));
+  }, []);
+
+  // User functions
+  const getUser = useCallback((id: string) => {
+    return users.find(u => u.id === id);
+  }, [users]);
+
+  const updateUserSmsVerification = useCallback((userId: string, verified: boolean) => {
+    setUsers(prev => prev.map(u => 
+      u.id === userId ? { ...u, smsVerified: verified } : u
     ));
   }, []);
 
@@ -236,10 +271,166 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [appointments, properties, addNotification]);
 
   const cancelAppointment = useCallback((id: string) => {
+    const appointment = appointments.find(a => a.id === id);
+    if (!appointment) return;
+    
     setAppointments(prev => prev.map(a => 
       a.id === id ? { ...a, status: 'cancelled' } : a
     ));
-  }, []);
+
+    // Notify agent about cancellation
+    const property = properties.find(p => p.id === appointment.propertyId);
+    addNotification({
+      userId: appointment.agentId,
+      type: 'booking_cancel',
+      title: 'Booking Cancelled',
+      message: `The viewing for ${property?.title || 'a property'} has been cancelled.`,
+      read: false,
+      relatedId: id,
+    });
+  }, [appointments, properties, addNotification]);
+
+  // Double-booking prevention: check if agent has conflict for given time slot
+  const hasAgentConflict = useCallback((
+    agentId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    excludeAppointmentId?: string
+  ): boolean => {
+    const conflictingAppointments = appointments.filter(a => {
+      // Exclude cancelled/rejected appointments and the current appointment being changed
+      if (a.status === 'cancelled' || a.status === 'rejected') return false;
+      if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
+      if (a.agentId !== agentId) return false;
+      if (a.date !== date) return false;
+      
+      // Check for time overlap
+      const aStart = a.startTime;
+      const aEnd = a.endTime;
+      // Overlap exists if: start < otherEnd AND end > otherStart
+      return startTime < aEnd && endTime > aStart;
+    });
+    
+    return conflictingAppointments.length > 0;
+  }, [appointments]);
+
+  // Get agents who are free for a specific slot
+  const getAgentsFreeForSlot = useCallback((
+    date: string,
+    startTime: string,
+    endTime: string,
+    excludeAppointmentId?: string
+  ): Agent[] => {
+    return agents.filter(agent => {
+      if (agent.isOnVacation) return false;
+      
+      // Check if agent has availability for this slot
+      const hasSlotAvailable = agent.availability.some(slot => 
+        slot.date === date && 
+        slot.startTime === startTime && 
+        slot.endTime === endTime && 
+        !slot.isBooked
+      );
+      
+      // Check for conflicts
+      const hasConflict = hasAgentConflict(agent.id, date, startTime, endTime, excludeAppointmentId);
+      
+      return hasSlotAvailable && !hasConflict;
+    });
+  }, [agents, hasAgentConflict]);
+
+  // Accept appointment
+  const acceptAppointment = useCallback((id: string) => {
+    const appointment = appointments.find(a => a.id === id);
+    if (!appointment) return;
+
+    setAppointments(prev => prev.map(a => 
+      a.id === id ? { ...a, status: 'accepted' } : a
+    ));
+
+    // Notify customer about acceptance
+    const property = properties.find(p => p.id === appointment.propertyId);
+    addNotification({
+      userId: appointment.customerId,
+      type: 'booking_accepted',
+      title: 'Booking Accepted',
+      message: `Your viewing for ${property?.title || 'a property'} has been confirmed by the agent.`,
+      read: false,
+      relatedId: id,
+    });
+  }, [appointments, properties, addNotification]);
+
+  // Reject appointment
+  const rejectAppointment = useCallback((id: string, reason?: string) => {
+    const appointment = appointments.find(a => a.id === id);
+    if (!appointment) return;
+
+    setAppointments(prev => prev.map(a => 
+      a.id === id ? { ...a, status: 'rejected' } : a
+    ));
+
+    // Notify customer about rejection
+    const property = properties.find(p => p.id === appointment.propertyId);
+    addNotification({
+      userId: appointment.customerId,
+      type: 'booking_rejected',
+      title: 'Booking Declined',
+      message: `Your viewing request for ${property?.title || 'a property'} was declined.${reason ? ` Reason: ${reason}` : ''} Please select a different time or agent.`,
+      read: false,
+      relatedId: id,
+    });
+  }, [appointments, properties, addNotification]);
+
+  // Messaging functions
+  const getMessagesByAppointment = useCallback((appointmentId: string) => {
+    return messages.filter(m => m.appointmentId === appointmentId).sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [messages]);
+
+  const canMessage = useCallback((appointmentId: string): boolean => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return false;
+    if (appointment.status !== 'accepted' && appointment.status !== 'scheduled') return false;
+    
+    // Get customer and agent
+    const customer = users.find(u => u.id === appointment.customerId);
+    const agent = agents.find(a => a.id === appointment.agentId);
+    
+    // Both must be SMS verified for messaging
+    return !!(customer?.smsVerified && agent?.smsVerified);
+  }, [appointments, users, agents]);
+
+  const sendMessage = useCallback((appointmentId: string, content: string) => {
+    if (!currentUser || !content.trim()) return;
+    if (!canMessage(appointmentId)) return;
+
+    const newMessage: AppointmentMessage = {
+      id: uuidv4(),
+      appointmentId,
+      senderId: currentUser.id,
+      senderRole: currentUser.role,
+      content: content.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+
+    // Notify the other party
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (appointment) {
+      const recipientId = currentUser.role === 'agent' ? appointment.customerId : appointment.agentId;
+      addNotification({
+        userId: recipientId,
+        type: 'booking_change',
+        title: 'New Message',
+        message: `You have a new message regarding your appointment.`,
+        read: false,
+        relatedId: appointmentId,
+      });
+    }
+  }, [currentUser, canMessage, appointments, addNotification]);
 
   // Admin functions
   const resolveAlert = useCallback((id: string, resolution: string, resolvedBy: string) => {
@@ -285,6 +476,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getAvailableAgents,
     toggleAgentVacation,
     updateAgentAvailability,
+    updateAgentSmsVerification,
+    users,
+    getUser,
+    updateUserSmsVerification,
     appointments,
     getAppointmentsByUser,
     getAppointmentsByProperty,
@@ -292,6 +487,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateAppointment,
     changeAgent,
     cancelAppointment,
+    acceptAppointment,
+    rejectAppointment,
+    hasAgentConflict,
+    getAgentsFreeForSlot,
+    messages,
+    getMessagesByAppointment,
+    sendMessage,
+    canMessage,
     notifications,
     getNotificationsByUser,
     markNotificationRead,

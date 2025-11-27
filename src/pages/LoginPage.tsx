@@ -17,7 +17,7 @@ export default function LoginPage() {
       navigate('/agent/dashboard');
     } else if (selectedRole === 'admin') {
       login(selectedRole);
-      navigate('/admin/dashboard');
+      navigate('/internal/admin/dashboard');
     } else {
       login(selectedRole);
       navigate('/');

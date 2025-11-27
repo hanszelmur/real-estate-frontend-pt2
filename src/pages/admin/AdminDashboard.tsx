@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { formatDate, formatTimeRange, formatRelativeTime, getInitials } from '../../utils/helpers';
+import type { Appointment } from '../../types';
+import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 
 export default function AdminDashboard() {
   const {
@@ -9,16 +11,22 @@ export default function AdminDashboard() {
     appointments,
     properties,
     agents,
+    users,
     adminAlerts,
     resolveAlert,
+    getAgentsFreeForSlot,
+    hasAgentConflict,
     createOverride,
   } = useApp();
 
-  const [selectedAppointment, setSelectedAppointment] = useState<string | null>(null);
+  const [selectedAppointmentForOverride, setSelectedAppointmentForOverride] = useState<string | null>(null);
+  const [selectedAppointmentForDetail, setSelectedAppointmentForDetail] = useState<Appointment | null>(null);
   const [overrideAgentId, setOverrideAgentId] = useState<string>('');
   const [overrideReason, setOverrideReason] = useState<string>('');
   const [resolutionText, setResolutionText] = useState<string>('');
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [overrideError, setOverrideError] = useState<string | null>(null);
 
   // Redirect if not logged in as admin
   if (!currentUser || currentUser.role !== 'admin') {
@@ -27,18 +35,38 @@ export default function AdminDashboard() {
 
   const getProperty = (id: string) => properties.find(p => p.id === id);
   const getAgent = (id: string) => agents.find(a => a.id === id);
+  const getCustomer = (id: string) => users.find(u => u.id === id);
 
   const pendingAlerts = adminAlerts.filter(a => a.status === 'pending');
   const resolvedAlerts = adminAlerts.filter(a => a.status === 'resolved');
-  const activeAppointments = appointments.filter(a => a.status === 'scheduled');
+  
+  // Get all active appointments (not cancelled or completed)
+  const activeAppointments = appointments.filter(a => 
+    a.status === 'scheduled' || a.status === 'pending' || a.status === 'accepted'
+  );
+  
+  // Filter appointments based on status
+  const filteredAppointments = filterStatus === 'all' 
+    ? activeAppointments 
+    : activeAppointments.filter(a => a.status === filterStatus);
 
-  const handleOverride = () => {
-    if (selectedAppointment && overrideAgentId && overrideReason) {
-      createOverride(selectedAppointment, overrideAgentId, overrideReason);
-      setSelectedAppointment(null);
-      setOverrideAgentId('');
-      setOverrideReason('');
+  const handleOverride = (appointmentId: string) => {
+    if (!overrideAgentId || !overrideReason) return;
+    
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+
+    // Check for double-booking
+    if (hasAgentConflict(overrideAgentId, appointment.date, appointment.startTime, appointment.endTime, appointmentId)) {
+      setOverrideError('Cannot assign this agent - they have a conflicting appointment at this time.');
+      return;
     }
+
+    setOverrideError(null);
+    createOverride(appointmentId, overrideAgentId, overrideReason);
+    setSelectedAppointmentForOverride(null);
+    setOverrideAgentId('');
+    setOverrideReason('');
   };
 
   const handleResolveAlert = (alertId: string) => {
@@ -49,10 +77,30 @@ export default function AdminDashboard() {
     }
   };
 
+  // Get available agents for a specific appointment slot
+  const getAvailableAgentsForAppointment = (appointment: Appointment) => {
+    return getAgentsFreeForSlot(
+      appointment.date,
+      appointment.startTime,
+      appointment.endTime,
+      appointment.id
+    ).filter(a => a.id !== appointment.agentId);
+  };
+
   const alertTypeColors: Record<string, string> = {
     complaint: 'bg-red-100 text-red-800',
     timeout: 'bg-orange-100 text-orange-800',
     manual_override: 'bg-purple-100 text-purple-800',
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'accepted': return 'bg-green-100 text-green-800';
+      case 'scheduled': return 'bg-blue-100 text-blue-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
@@ -60,8 +108,15 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-1">Manage assignments, overrides, and alerts</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-gray-600 mt-1">Manage assignments, overrides, and global availability control</p>
+            </div>
+            <div className="px-4 py-2 bg-purple-100 text-purple-800 rounded-lg text-sm">
+              Internal Admin Panel
+            </div>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -147,93 +202,168 @@ export default function AdminDashboard() {
             {/* Assignment Management */}
             <div className="bg-white rounded-lg shadow-md">
               <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Active Assignments</h2>
-                <p className="text-sm text-gray-500 mt-1">Override agent assignments if needed</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">All Appointments</h2>
+                    <p className="text-sm text-gray-500 mt-1">Click on any appointment to view details or override assignment</p>
+                  </div>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm p-2 border"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="scheduled">Scheduled</option>
+                  </select>
+                </div>
               </div>
               <div className="p-6">
-                {activeAppointments.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No active appointments</p>
+                {filteredAppointments.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8">No appointments found</p>
                 ) : (
                   <div className="space-y-4">
-                    {activeAppointments.map(appointment => {
+                    {filteredAppointments.map(appointment => {
                       const property = getProperty(appointment.propertyId);
                       const agent = getAgent(appointment.agentId);
+                      const customer = getCustomer(appointment.customerId);
+                      const availableAgentsForSlot = getAvailableAgentsForAppointment(appointment);
                       
                       return (
-                        <div key={appointment.id} className="border rounded-lg p-4">
+                        <div 
+                          key={appointment.id} 
+                          className="border rounded-lg p-4 hover:border-blue-400 cursor-pointer transition-colors"
+                          onClick={() => setSelectedAppointmentForDetail(appointment)}
+                        >
                           <div className="flex items-start justify-between mb-3">
                             <div>
                               <h4 className="font-medium">{property?.title}</h4>
                               <p className="text-sm text-gray-500">
                                 {formatDate(appointment.date)} at {formatTimeRange(appointment.startTime, appointment.endTime)}
                               </p>
+                              <p className="text-sm text-gray-600 mt-1">
+                                Customer: {customer?.name || appointment.customerName || 'Unknown'}
+                              </p>
                             </div>
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm mr-2">
-                                {agent ? getInitials(agent.name) : '?'}
+                            <div className="text-right">
+                              <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
+                                {appointment.status}
+                              </span>
+                              <div className="flex items-center mt-2">
+                                <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs mr-1">
+                                  {agent ? getInitials(agent.name) : '?'}
+                                </div>
+                                <span className="text-sm">{agent?.name}</span>
                               </div>
-                              <span className="text-sm font-medium">{agent?.name}</span>
                             </div>
                           </div>
 
-                          {selectedAppointment === appointment.id ? (
-                            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                              <h5 className="font-medium text-sm mb-2">Manual Override</h5>
-                              <div className="space-y-3">
-                                <div>
-                                  <label className="block text-sm text-gray-700 mb-1">New Agent</label>
-                                  <select
-                                    value={overrideAgentId}
-                                    onChange={(e) => setOverrideAgentId(e.target.value)}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm p-2 border"
-                                  >
-                                    <option value="">Select agent...</option>
-                                    {agents
-                                      .filter(a => a.id !== appointment.agentId && !a.isOnVacation)
-                                      .map(a => (
-                                        <option key={a.id} value={a.id}>{a.name}</option>
-                                      ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="block text-sm text-gray-700 mb-1">Reason</label>
-                                  <input
-                                    type="text"
-                                    value={overrideReason}
-                                    onChange={(e) => setOverrideReason(e.target.value)}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm p-2 border"
-                                    placeholder="Reason for override..."
-                                  />
-                                </div>
-                                <div className="flex justify-end space-x-2">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedAppointment(null);
-                                      setOverrideAgentId('');
-                                      setOverrideReason('');
-                                    }}
-                                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-md"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={handleOverride}
-                                    disabled={!overrideAgentId || !overrideReason}
-                                    className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
-                                  >
-                                    Apply Override
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setSelectedAppointment(appointment.id)}
-                              className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                          {selectedAppointmentForOverride === appointment.id && (
+                            <div 
+                              className="mt-3 p-3 bg-gray-50 rounded-lg"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              Override Assignment
-                            </button>
+                              <h5 className="font-medium text-sm mb-2">Manual Override</h5>
+                              
+                              {overrideError && (
+                                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                  <p className="text-sm text-red-700">{overrideError}</p>
+                                </div>
+                              )}
+                              
+                              {availableAgentsForSlot.length === 0 ? (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                  <p className="text-sm text-red-700">
+                                    No agents are available for this time slot. All agents either have conflicting appointments or are on vacation.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  <div>
+                                    <label className="block text-sm text-gray-700 mb-1">
+                                      New Agent (Only showing agents free for this slot)
+                                    </label>
+                                    <select
+                                      value={overrideAgentId}
+                                      onChange={(e) => {
+                                        setOverrideAgentId(e.target.value);
+                                        setOverrideError(null);
+                                      }}
+                                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm p-2 border"
+                                    >
+                                      <option value="">Select available agent...</option>
+                                      {availableAgentsForSlot.map(a => (
+                                        <option key={a.id} value={a.id}>
+                                          {a.name} (Rating: {a.rating})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm text-gray-700 mb-1">Reason</label>
+                                    <input
+                                      type="text"
+                                      value={overrideReason}
+                                      onChange={(e) => setOverrideReason(e.target.value)}
+                                      className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm p-2 border"
+                                      placeholder="Reason for override..."
+                                    />
+                                  </div>
+                                  <div className="flex justify-end space-x-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedAppointmentForOverride(null);
+                                        setOverrideAgentId('');
+                                        setOverrideReason('');
+                                        setOverrideError(null);
+                                      }}
+                                      className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-md"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOverride(appointment.id);
+                                      }}
+                                      disabled={!overrideAgentId || !overrideReason}
+                                      className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                                    >
+                                      Apply Override
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           )}
+
+                          <div className="flex space-x-2 mt-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAppointmentForDetail(appointment);
+                              }}
+                              className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"
+                            >
+                              View Details
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAppointmentForOverride(
+                                  selectedAppointmentForOverride === appointment.id ? null : appointment.id
+                                );
+                                setOverrideAgentId('');
+                                setOverrideReason('');
+                                setOverrideError(null);
+                              }}
+                              className="px-3 py-1.5 text-sm bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200"
+                            >
+                              {selectedAppointmentForOverride === appointment.id ? 'Cancel Override' : 'Override'}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -252,6 +382,12 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                   <span className="text-red-800">Pending Alerts</span>
                   <span className="text-2xl font-bold text-red-600">{pendingAlerts.length}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <span className="text-yellow-800">Pending Bookings</span>
+                  <span className="text-2xl font-bold text-yellow-600">
+                    {appointments.filter(a => a.status === 'pending').length}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                   <span className="text-blue-800">Active Appointments</span>
@@ -304,7 +440,12 @@ export default function AdminDashboard() {
                       <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm mr-2">
                         {getInitials(agent.name)}
                       </div>
-                      <span className="text-sm">{agent.name}</span>
+                      <div>
+                        <span className="text-sm block">{agent.name}</span>
+                        <span className={`text-xs ${agent.smsVerified ? 'text-green-600' : 'text-gray-400'}`}>
+                          {agent.smsVerified ? '✓ SMS Verified' : 'Not Verified'}
+                        </span>
+                      </div>
                     </div>
                     <span className={`px-2 py-0.5 text-xs rounded-full ${
                       agent.isOnVacation 
@@ -320,6 +461,18 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Appointment Detail Modal */}
+      {selectedAppointmentForDetail && (
+        <AppointmentDetailModal
+          appointment={selectedAppointmentForDetail}
+          property={getProperty(selectedAppointmentForDetail.propertyId)}
+          agent={getAgent(selectedAppointmentForDetail.agentId)}
+          customer={getCustomer(selectedAppointmentForDetail.customerId)}
+          onClose={() => setSelectedAppointmentForDetail(null)}
+          mode="admin"
+        />
+      )}
     </div>
   );
 }

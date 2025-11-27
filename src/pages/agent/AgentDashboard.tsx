@@ -1,22 +1,26 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import type { Agent, AgentAvailability } from '../../types';
+import type { Agent, AgentAvailability, Appointment } from '../../types';
 import { formatDate, formatTimeRange, generateStars } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
+import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 
 export default function AgentDashboard() {
   const {
     currentUser,
     appointments,
     properties,
+    users,
     toggleAgentVacation,
     updateAgentAvailability,
+    updateAgentSmsVerification,
     getNotificationsByUser,
     markNotificationRead,
   } = useApp();
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   // Redirect if not logged in as agent
   if (!currentUser || currentUser.role !== 'agent') {
@@ -27,11 +31,23 @@ export default function AgentDashboard() {
   const agentNotifications = getNotificationsByUser(agent.id);
   const unreadNotifications = agentNotifications.filter(n => !n.read);
 
-  // Get agent's appointments
-  const agentAppointments = appointments.filter(a => a.agentId === agent.id && a.status === 'scheduled');
+  // Get agent's appointments (pending, accepted, scheduled)
+  const agentAppointments = appointments.filter(a => 
+    a.agentId === agent.id && 
+    (a.status === 'scheduled' || a.status === 'pending' || a.status === 'accepted')
+  ).sort((a, b) => {
+    // Sort by date and time
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  // Separate pending and accepted/scheduled appointments
+  const pendingAppointments = agentAppointments.filter(a => a.status === 'pending');
+  const confirmedAppointments = agentAppointments.filter(a => a.status === 'accepted' || a.status === 'scheduled');
   
   // Get property info
   const getProperty = (id: string) => properties.find(p => p.id === id);
+  const getCustomer = (id: string) => users.find(u => u.id === id);
 
   // Group availability by date
   const groupedAvailability: Record<string, AgentAvailability[]> = {};
@@ -42,10 +58,26 @@ export default function AgentDashboard() {
     groupedAvailability[slot.date].push(slot);
   });
 
-  const dates = Object.keys(groupedAvailability).sort().slice(0, 14);
+  const dates = Object.keys(groupedAvailability).sort().slice(0, 21); // Show 3 weeks
 
   const toggleSlotAvailability = (slotId: string, isBooked: boolean) => {
     updateAgentAvailability(agent.id, slotId, !isBooked);
+  };
+
+  const handleSmsVerify = () => {
+    // DEMO: In a production app, this would trigger an SMS verification flow
+    // with OTP code sent to the agent's phone number and validation.
+    // For this demo, verification is set to true immediately.
+    updateAgentSmsVerification(agent.id, true);
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'accepted': return 'bg-green-100 text-green-800';
+      case 'scheduled': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
@@ -90,36 +122,57 @@ export default function AgentDashboard() {
           </div>
         )}
 
+        {/* SMS Verification Banner */}
+        {!agent.smsVerified && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+            <div>
+              <p className="text-blue-800 font-medium">Verify Your Phone Number</p>
+              <p className="text-blue-600 text-sm">SMS verification is required to enable messaging with customers and view their contact info.</p>
+            </div>
+            <button
+              onClick={handleSmsVerify}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 whitespace-nowrap"
+            >
+              Verify Now
+            </button>
+          </div>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Upcoming Appointments */}
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Upcoming Appointments</h2>
-              </div>
-              <div className="p-6">
-                {agentAppointments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-gray-500">No upcoming appointments</p>
+            {/* Pending Appointments - Require Action */}
+            {pendingAppointments.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md border-2 border-yellow-400">
+                <div className="px-6 py-4 border-b border-gray-200 bg-yellow-50">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-yellow-800">
+                      Action Required ({pendingAppointments.length})
+                    </h2>
+                    <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-sm rounded-full font-medium">
+                      Pending Approval
+                    </span>
                   </div>
-                ) : (
+                  <p className="text-sm text-yellow-700 mt-1">Accept or reject these booking requests</p>
+                </div>
+                <div className="p-6">
                   <div className="space-y-4">
-                    {agentAppointments.map(appointment => {
+                    {pendingAppointments.map(appointment => {
                       const property = getProperty(appointment.propertyId);
                       
                       return (
-                        <div key={appointment.id} className="border rounded-lg p-4">
+                        <div 
+                          key={appointment.id} 
+                          className="border-2 border-yellow-200 rounded-lg p-4 hover:border-yellow-400 cursor-pointer transition-colors"
+                          onClick={() => setSelectedAppointment(appointment)}
+                        >
                           <div className="flex items-start justify-between">
                             <div>
                               <h4 className="font-semibold text-lg">{property?.title}</h4>
                               <p className="text-gray-600 text-sm">{property?.address}</p>
                             </div>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                              Scheduled
+                            <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
+                              {appointment.status}
                             </span>
                           </div>
                           <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
@@ -132,6 +185,59 @@ export default function AgentDashboard() {
                               <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
                             </div>
                           </div>
+                          <p className="mt-3 text-sm text-yellow-700">Click to view details and respond</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Confirmed Appointments */}
+            <div className="bg-white rounded-lg shadow-md">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Upcoming Appointments</h2>
+              </div>
+              <div className="p-6">
+                {confirmedAppointments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-gray-500">No confirmed appointments</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {confirmedAppointments.map(appointment => {
+                      const property = getProperty(appointment.propertyId);
+                      
+                      return (
+                        <div 
+                          key={appointment.id} 
+                          className="border rounded-lg p-4 hover:border-blue-400 cursor-pointer transition-colors"
+                          onClick={() => setSelectedAppointment(appointment)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h4 className="font-semibold text-lg">{property?.title}</h4>
+                              <p className="text-gray-600 text-sm">{property?.address}</p>
+                            </div>
+                            <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
+                              {appointment.status}
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-500">Date</p>
+                              <p className="font-medium">{formatDate(appointment.date)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">Time</p>
+                              <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
+                            </div>
+                          </div>
+                          <p className="mt-3 text-sm text-blue-600">Click to view details</p>
                         </div>
                       );
                     })}
@@ -140,28 +246,34 @@ export default function AgentDashboard() {
               </div>
             </div>
 
-            {/* Calendar / Availability */}
+            {/* Enhanced Calendar / Availability */}
             <div className="bg-white rounded-lg shadow-md">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">My Availability</h2>
-                <p className="text-sm text-gray-500 mt-1">Click a slot to toggle availability</p>
+                <p className="text-sm text-gray-500 mt-1">Click a slot to toggle availability. Changes are instantly reflected for customers.</p>
               </div>
               <div className="p-6">
-                {/* Date tabs */}
-                <div className="flex overflow-x-auto space-x-2 pb-4 mb-4 border-b">
+                {/* Date tabs - Enhanced with larger touch targets */}
+                <div className="grid grid-cols-7 gap-2 mb-6">
                   {dates.map(date => {
                     const d = new Date(date);
                     const isSelected = selectedDate === date;
                     const daySlots = groupedAvailability[date] || [];
                     const hasBooking = daySlots.some(s => s.isBooked && s.bookingId);
+                    const hasAppointmentOnDay = appointments.some(
+                      a => a.agentId === agent.id && a.date === date && 
+                           (a.status === 'scheduled' || a.status === 'accepted' || a.status === 'pending')
+                    );
                     
                     return (
                       <button
                         key={date}
                         onClick={() => setSelectedDate(date)}
-                        className={`flex-shrink-0 px-4 py-2 rounded-lg text-center transition-colors ${
+                        className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
                           isSelected
-                            ? 'bg-blue-600 text-white'
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : hasAppointmentOnDay
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200 border-2 border-green-300'
                             : hasBooking
                             ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -170,47 +282,76 @@ export default function AgentDashboard() {
                         <p className="text-xs font-medium">
                           {d.toLocaleDateString('en-US', { weekday: 'short' })}
                         </p>
-                        <p className="text-lg font-bold">{d.getDate()}</p>
+                        <p className="text-2xl font-bold">{d.getDate()}</p>
+                        <p className="text-xs">
+                          {d.toLocaleDateString('en-US', { month: 'short' })}
+                        </p>
+                        {hasAppointmentOnDay && (
+                          <span className="inline-block w-2 h-2 bg-green-500 rounded-full mt-1"></span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Time slots */}
+                {/* Time slots - Enhanced with larger buttons */}
                 {selectedDate ? (
                   <div>
-                    <h3 className="font-medium mb-3">{formatDate(selectedDate)}</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <h3 className="font-medium mb-4 text-lg">{formatDate(selectedDate)}</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {(groupedAvailability[selectedDate] || []).map(slot => {
                         const hasAppointment = appointments.some(
                           a => a.agentId === agent.id && a.date === slot.date && 
-                               a.startTime === slot.startTime && a.status === 'scheduled'
+                               a.startTime === slot.startTime && 
+                               (a.status === 'scheduled' || a.status === 'accepted' || a.status === 'pending')
+                        );
+                        const appointmentForSlot = appointments.find(
+                          a => a.agentId === agent.id && a.date === slot.date && 
+                               a.startTime === slot.startTime && 
+                               (a.status === 'scheduled' || a.status === 'accepted' || a.status === 'pending')
                         );
                         
                         return (
                           <button
                             key={slot.id}
-                            onClick={() => !hasAppointment && toggleSlotAvailability(slot.id, slot.isBooked)}
-                            disabled={hasAppointment}
-                            className={`p-3 rounded-lg text-sm transition-colors ${
+                            onClick={() => {
+                              if (appointmentForSlot) {
+                                setSelectedAppointment(appointmentForSlot);
+                              } else {
+                                toggleSlotAvailability(slot.id, slot.isBooked);
+                              }
+                            }}
+                            className={`p-4 rounded-lg text-sm transition-all transform hover:scale-105 ${
                               hasAppointment
-                                ? 'bg-red-100 text-red-800 cursor-not-allowed'
+                                ? 'bg-green-100 text-green-800 border-2 border-green-300 hover:bg-green-200'
                                 : slot.isBooked
-                                ? 'bg-gray-200 text-gray-500'
-                                : 'bg-green-100 text-green-800 hover:bg-green-200'
+                                ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                : 'bg-green-50 text-green-800 border-2 border-green-200 hover:bg-green-100'
                             }`}
                           >
-                            <p className="font-medium">{formatTimeRange(slot.startTime, slot.endTime)}</p>
-                            <p className="text-xs mt-1">
-                              {hasAppointment ? 'Booked' : slot.isBooked ? 'Blocked' : 'Available'}
+                            <p className="font-bold text-base">{formatTimeRange(slot.startTime, slot.endTime)}</p>
+                            <p className="text-xs mt-2 font-medium">
+                              {hasAppointment ? '📅 Appointment' : slot.isBooked ? '🚫 Blocked' : '✓ Available'}
                             </p>
                           </button>
                         );
                       })}
                     </div>
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-600">
+                        <span className="inline-block w-3 h-3 bg-green-200 border border-green-300 rounded mr-2"></span>Available for booking
+                        <span className="inline-block w-3 h-3 bg-gray-200 rounded ml-4 mr-2"></span>Blocked
+                        <span className="inline-block w-3 h-3 bg-green-100 border-2 border-green-300 rounded ml-4 mr-2"></span>Has appointment
+                      </p>
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-4">Select a date to view time slots</p>
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-gray-500">Select a date above to view and manage time slots</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -292,9 +433,46 @@ export default function AgentDashboard() {
                 )}
               </div>
             </div>
+
+            {/* SMS Verification Status */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Status</h2>
+              <div className={`flex items-center justify-between p-3 rounded-lg ${
+                agent.smsVerified ? 'bg-green-50' : 'bg-yellow-50'
+              }`}>
+                <div className="flex items-center">
+                  <span className={`w-3 h-3 rounded-full mr-3 ${
+                    agent.smsVerified ? 'bg-green-500' : 'bg-yellow-500'
+                  }`}></span>
+                  <span className={agent.smsVerified ? 'text-green-800' : 'text-yellow-800'}>
+                    Phone {agent.smsVerified ? 'Verified' : 'Not Verified'}
+                  </span>
+                </div>
+                {!agent.smsVerified && (
+                  <button
+                    onClick={handleSmsVerify}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Verify
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Appointment Detail Modal */}
+      {selectedAppointment && (
+        <AppointmentDetailModal
+          appointment={selectedAppointment}
+          property={getProperty(selectedAppointment.propertyId)}
+          agent={agent}
+          customer={getCustomer(selectedAppointment.customerId)}
+          onClose={() => setSelectedAppointment(null)}
+          mode="agent"
+        />
+      )}
     </div>
   );
 }

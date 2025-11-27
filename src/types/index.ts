@@ -8,6 +8,7 @@ export interface User {
   email: string;
   role: UserRole;
   phone?: string;
+  smsVerified?: boolean; // SMS verification status for messaging
 }
 
 // Property interface
@@ -38,6 +39,7 @@ export interface Agent extends User {
   isOnVacation: boolean;
   availability: AgentAvailability[];
   latestRatings: AgentRating[];
+  smsVerified?: boolean; // SMS verification status for messaging
 }
 
 // Agent availability slot
@@ -69,11 +71,35 @@ export interface Appointment {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'scheduled' | 'completed' | 'cancelled';
+  /**
+   * Appointment status flow:
+   * - 'pending': Initial state after customer booking - awaiting agent confirmation
+   * - 'accepted': Agent has confirmed the appointment
+   * - 'rejected': Agent has declined the appointment
+   * - 'scheduled': Appointment is confirmed and scheduled (legacy/alternative to accepted)
+   * - 'completed': Appointment has been completed
+   * - 'cancelled': Appointment was cancelled by customer or admin
+   */
+  status: 'pending' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled';
   // Race logic fields
   hasViewingRights: boolean;
   hasPurchaseRights: boolean;
   purchaseDeclined?: boolean;
+  createdAt: string;
+  // New fields for enhanced features
+  notes?: string; // Appointment notes
+  customerName?: string; // Cached customer name for display
+  customerEmail?: string; // Cached customer email
+  customerPhone?: string; // Cached customer phone
+}
+
+// Message for appointment-specific messaging
+export interface AppointmentMessage {
+  id: string;
+  appointmentId: string;
+  senderId: string;
+  senderRole: UserRole;
+  content: string;
   createdAt: string;
 }
 
@@ -81,7 +107,7 @@ export interface Appointment {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override';
+  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending';
   title: string;
   message: string;
   read: boolean;

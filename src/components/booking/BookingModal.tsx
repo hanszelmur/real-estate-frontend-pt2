@@ -13,23 +13,29 @@ interface BookingModalProps {
 type BookingStep = 'agent' | 'time' | 'confirm';
 
 export default function BookingModal({ property, onClose, onSuccess }: BookingModalProps) {
-  const { currentUser, getAvailableAgents, createAppointment } = useApp();
+  const { currentUser, getAvailableAgents, createAppointment, hasAgentConflict, users, updateAgentAvailability, addNotification } = useApp();
   const [step, setStep] = useState<BookingStep>('agent');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AgentAvailability | null>(null);
   const [autoAssign, setAutoAssign] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const availableAgents = getAvailableAgents();
 
-  // Get available time slots for selected agent
+  // Get available time slots for selected agent (with double-booking prevention)
   const getAvailableSlots = (agent: Agent): AgentAvailability[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     return agent.availability.filter(slot => {
       const slotDate = new Date(slot.date);
-      return !slot.isBooked && slotDate >= today;
-    }).slice(0, 18); // Show next 3 days of slots
+      if (slotDate < today) return false;
+      if (slot.isBooked) return false;
+      
+      // Check for double-booking - ensure agent doesn't have conflicting appointments
+      const hasConflict = hasAgentConflict(agent.id, slot.date, slot.startTime, slot.endTime);
+      return !hasConflict;
+    }).slice(0, 24); // Show next 4 days of slots
   };
 
   // Group slots by date
@@ -47,37 +53,72 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     setSelectedAgent(agent);
     setAutoAssign(false);
     setSelectedSlot(null);
+    setBookingError(null);
   };
 
   const handleAutoAssign = () => {
-    const randomAgent = randomSelect(availableAgents);
+    // Find agents with available slots (not just not on vacation)
+    const agentsWithSlots = availableAgents.filter(agent => getAvailableSlots(agent).length > 0);
+    const randomAgent = randomSelect(agentsWithSlots);
     if (randomAgent) {
       setSelectedAgent(randomAgent);
       setAutoAssign(true);
       setSelectedSlot(null);
+      setBookingError(null);
+    } else {
+      setBookingError('No agents have available slots at this time. Please try again later.');
     }
   };
 
   const handleSlotSelect = (slot: AgentAvailability) => {
     setSelectedSlot(slot);
+    setBookingError(null);
   };
 
   const handleConfirm = () => {
     if (!selectedAgent || !selectedSlot || !currentUser) return;
 
+    // Final double-booking check before creating appointment
+    if (hasAgentConflict(selectedAgent.id, selectedSlot.date, selectedSlot.startTime, selectedSlot.endTime)) {
+      setBookingError('This time slot is no longer available. Please select a different time.');
+      setSelectedSlot(null);
+      setStep('time');
+      return;
+    }
+
+    // Get customer info for the appointment
+    const customer = users.find(u => u.id === currentUser.id);
+
     // Check race condition - determine if this customer gets purchase rights
     const hasPurchaseRights = !property.firstViewerCustomerId || property.firstViewerCustomerId === currentUser.id;
 
-    createAppointment({
+    // Create the appointment - auto-accept if slot is available (agent can reject later)
+    const newAppointment = createAppointment({
       propertyId: property.id,
       customerId: currentUser.id,
       agentId: selectedAgent.id,
       date: selectedSlot.date,
       startTime: selectedSlot.startTime,
       endTime: selectedSlot.endTime,
-      status: 'scheduled',
+      status: 'pending', // Starts as pending, agent can accept/reject
       hasViewingRights: true,
       hasPurchaseRights,
+      customerName: customer?.name,
+      customerEmail: customer?.email,
+      customerPhone: customer?.phone,
+    });
+
+    // Mark the slot as booked
+    updateAgentAvailability(selectedAgent.id, selectedSlot.id, true, newAppointment.id);
+
+    // Notify customer about pending status
+    addNotification({
+      userId: currentUser.id,
+      type: 'booking_pending',
+      title: 'Booking Submitted',
+      message: `Your viewing request for ${property.title} has been submitted. The agent will confirm shortly.`,
+      read: false,
+      relatedId: newAppointment.id,
     });
 
     onSuccess();
@@ -86,6 +127,12 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
   const renderAgentStep = () => (
     <div>
       <h3 className="text-lg font-semibold mb-4">Select an Agent</h3>
+      
+      {bookingError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-700">{bookingError}</p>
+        </div>
+      )}
       
       {/* Auto-assign option */}
       <div className="mb-4">
@@ -122,14 +169,29 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
       {/* Agent list */}
       <div className="mt-4 space-y-3 max-h-64 overflow-y-auto">
-        {availableAgents.map(agent => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            selected={selectedAgent?.id === agent.id && !autoAssign}
-            onSelect={handleAgentSelect}
-          />
-        ))}
+        {availableAgents.map(agent => {
+          const slotsAvailable = getAvailableSlots(agent).length;
+          return (
+            <div key={agent.id} className="relative">
+              <AgentCard
+                agent={agent}
+                selected={selectedAgent?.id === agent.id && !autoAssign}
+                onSelect={slotsAvailable > 0 ? handleAgentSelect : undefined}
+                showSelectButton={slotsAvailable > 0}
+              />
+              {slotsAvailable === 0 && (
+                <div className="absolute inset-0 bg-gray-100 bg-opacity-50 flex items-center justify-center rounded-lg">
+                  <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">No available slots</span>
+                </div>
+              )}
+              {slotsAvailable > 0 && (
+                <span className="absolute top-2 right-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                  {slotsAvailable} slots
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-6 flex justify-end space-x-3">
@@ -163,9 +225,16 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
           Available times with {selectedAgent.name}
         </p>
 
+        {bookingError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700">{bookingError}</p>
+          </div>
+        )}
+
         {Object.keys(groupedSlots).length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <p>No available slots for this agent.</p>
+            <p className="text-sm mt-1">All slots may be booked or blocked.</p>
             <button
               onClick={() => setStep('agent')}
               className="mt-2 text-blue-600 hover:underline"
@@ -229,6 +298,12 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
       <div>
         <h3 className="text-lg font-semibold mb-4">Confirm Booking</h3>
 
+        {bookingError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-700">{bookingError}</p>
+          </div>
+        )}
+
         {!willHavePurchaseRights && (
           <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-start">
@@ -262,9 +337,12 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
           </div>
         </div>
 
-        <p className="text-sm text-gray-500 mt-4">
-          You can change your agent at any time after booking from your dashboard.
-        </p>
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-700">
+            <strong>Note:</strong> Your booking will be submitted as pending. The agent will confirm your appointment shortly.
+            You can change your agent at any time from your dashboard.
+          </p>
+        </div>
 
         <div className="mt-6 flex justify-between">
           <button
@@ -277,7 +355,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
             onClick={handleConfirm}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
           >
-            Confirm Booking
+            Submit Booking
           </button>
         </div>
       </div>
