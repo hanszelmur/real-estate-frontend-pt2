@@ -2,6 +2,39 @@
 
 A comprehensive real estate frontend application for TES Properties, based in Davao City, Philippines. This demo application showcases property listings, booking flows, and role-based dashboards for customers, agents, and administrators.
 
+## Demo/Test Release Features
+
+This release includes a complete customer dashboard overhaul with the following features:
+
+### Customer Dashboard Enhancements
+- **Status Tabs**: Filter appointments by Accepted, Pending, Rejected with notification counts for each status
+- **Clickable Appointments**: All appointments open a detailed modal view showing:
+  - Property information (title, address, details)
+  - Agent information with rating and sales count
+  - Current status and booking time
+  - Per-appointment messaging (when SMS verified)
+  - Action buttons based on status
+
+### Agent Rejection Auto-Assignment
+- When an agent rejects a booking, the system automatically assigns a new available agent
+- Blacklisted agents are excluded from auto-assignment
+- Customer must approve the new agent before status becomes "accepted"
+- If customer declines, they can select from other available agents
+- If no agents available, customer is prompted to rebook for a different time slot
+- Clear notifications at each step of the process
+
+### Sidebar Chat Drawer
+- New chat button in header opens an overlay/side-drawer
+- Lists all active appointments with property info
+- Per-appointment messaging in a web-app style interface
+- Clean, responsive design that works on all devices
+- Closable overlay with smooth transitions
+
+### Demo Mode
+- Appointments are seeded with diverse statuses (accepted, pending, pending_approval, rejected)
+- No new booking creation flow (demo-only)
+- Property browsing remains active
+
 ## Features
 
 ### Public Pages
@@ -12,10 +45,12 @@ A comprehensive real estate frontend application for TES Properties, based in Da
 
 ### Customer Features
 - Browse and filter properties
-- Book property viewings with agent selection (choose or auto-assign)
-- View appointment details in personal dashboard
-- Change assigned agent at any time (per appointment only)
-- Receive notifications about booking status, acceptance, rejection, and race condition alerts
+- **Status tabs dashboard** with Accepted, Pending, Rejected filters and counts
+- **Clickable appointments** that open detailed modal views
+- **Per-appointment chat** with assigned agents (requires SMS verification)
+- **Agent rejection handling**: Auto-assignment of new agent with customer approval flow
+- View appointment details including property, agent info, status, and actions
+- Receive notifications about booking status, acceptance, rejection, and reassignment
 - SMS verification for enabling messaging with agents
 
 ### Agent Dashboard
@@ -51,6 +86,16 @@ A comprehensive real estate frontend application for TES Properties, based in Da
 6. Customer is notified instantly of acceptance or rejection
 7. Customer can change agent as many times as desired from dashboard
 8. Agent assignment is per-appointment only (does not persist beyond single appointments)
+
+### Agent Rejection & Auto-Assignment Flow
+1. Agent rejects a booking request with optional reason
+2. System automatically finds an available agent (excluding blacklisted agents)
+3. **If agent found**: Appointment status becomes "pending_approval", customer notified
+4. Customer can:
+   - **Approve** the new agent → Status becomes "pending" (awaiting agent confirmation)
+   - **Select Different** → Choose from other available agents
+5. **If no agents available**: Appointment status becomes "rejected", customer prompted to rebook
+6. Clear notifications at each step with rejection reasons displayed
 
 ### Double-Booking Prevention
 - **Strict enforcement across all flows**: No agent can be assigned to two overlapping appointments
@@ -156,6 +201,12 @@ src/
 
 ## Screenshots
 
+### Customer Dashboard with Status Tabs
+![Customer Dashboard](https://github.com/user-attachments/assets/df477f9b-f6b6-49b9-9ff0-23c9c3936a40)
+
+### Appointment Detail Modal (Agent Approval Required)
+![Appointment Detail Modal](https://github.com/user-attachments/assets/62d2d4a4-11b3-41cd-ae34-8f2a810e6a15)
+
 ### Home Page
 ![Home Page](https://github.com/user-attachments/assets/2ff5ed6b-15c0-44ce-b752-f40138cc15a2)
 
@@ -179,6 +230,14 @@ Customer → Properties → Select Property → Schedule Viewing
     → Select Agent (or Auto-assign) → Select Time Slot → Submit
     → Booking Pending → Agent Accepts/Rejects
     → Customer Notified → Dashboard → Change Agent (optional)
+```
+
+### Agent Rejection Auto-Assignment Flow
+```
+Agent Rejects → System finds available agent (excluding blacklisted)
+    → If found: Status = "pending_approval" → Customer approves/selects different
+        → Approved: Status = "pending" → New agent accepts/rejects
+    → If none available: Status = "rejected" → Customer prompted to rebook
 ```
 
 ### Race Condition Flow
