@@ -27,7 +27,7 @@ interface AppContextType {
   agents: Agent[];
   getAgent: (id: string) => Agent | undefined;
   getAvailableAgents: () => Agent[];
-  getAvailableAgentsForCustomer: (customerId: string, date: string, startTime: string, endTime: string, excludeAgentIds?: string[]) => Agent[];
+  getAvailableAgentsForCustomer: (customerId: string, date: string, startTime: string, endTime?: string, excludeAgentIds?: string[]) => Agent[];
   toggleAgentVacation: (agentId: string) => void;
   updateAgentAvailability: (agentId: string, slotId: string, isBooked: boolean, bookingId?: string) => void;
   updateAgentSmsVerification: (agentId: string, verified: boolean) => void;
@@ -51,6 +51,13 @@ interface AppContextType {
   rejectAppointment: (id: string, reason?: string) => void;
   approveNewAgent: (appointmentId: string) => void;
   selectDifferentAgent: (appointmentId: string, newAgentId: string) => void;
+  hasAgentConflict: (agentId: string, date: string, startTime: string, endTime?: string, excludeAppointmentId?: string) => boolean;
+  getAgentsFreeForSlot: (date: string, startTime: string, endTime?: string, excludeAppointmentId?: string) => Agent[];
+  markAppointmentDone: (id: string) => void;
+  markAppointmentSold: (id: string) => void;
+  getSoldProperties: () => Property[];
+  getAvailablePropertiesForBooking: () => Property[];
+  hasPendingViewingsForProperty: (propertyId: string, excludeCustomerId?: string) => boolean;
   hasAgentConflict: (agentId: string, date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => boolean;
   getAgentsFreeForSlot: (date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => Agent[];
   
@@ -194,11 +201,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     customerId: string,
     date: string,
     startTime: string,
-    endTime: string,
+    endTime?: string,
     excludeAgentIds: string[] = []
   ): Agent[] => {
     const customer = users.find(u => u.id === customerId);
     const blacklistedIds = customer?.blacklistedAgentIds || [];
+    const effectiveEndTime = endTime || startTime;
     
     return agents.filter(agent => {
       // Skip if on vacation
@@ -214,7 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const hasSlotAvailable = agent.availability.some(slot => 
         slot.date === date && 
         slot.startTime === startTime && 
-        slot.endTime === endTime && 
+        (!endTime || slot.endTime === endTime) && 
         !slot.isBooked
       );
       
@@ -223,7 +231,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (a.status === 'cancelled' || a.status === 'rejected') return false;
         if (a.agentId !== agent.id) return false;
         if (a.date !== date) return false;
-        return startTime < a.endTime && endTime > a.startTime;
+        // Handle optional endTime - use a default duration if not set
+        const apptEndTime = a.endTime || a.startTime;
+        return startTime < apptEndTime && effectiveEndTime > a.startTime;
       }).length > 0;
       
       return hasSlotAvailable && !hasConflict;
@@ -484,21 +494,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     agentId: string,
     date: string,
     startTime: string,
-    endTime: string,
+    endTime?: string,
     excludeAppointmentId?: string
   ): boolean => {
+    // Use provided endTime or assume 1 hour duration as minimum
+    const effectiveEndTime = endTime || (() => {
+      const [hours, mins] = startTime.split(':').map(Number);
+      const endHour = Math.min(hours + 1, 23);
+      return `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    })();
+    
     const conflictingAppointments = appointments.filter(a => {
-      // Exclude cancelled/rejected appointments and the current appointment being changed
-      if (a.status === 'cancelled' || a.status === 'rejected') return false;
+      // Exclude cancelled/rejected/done/sold appointments and the current appointment being changed
+      if (['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)) return false;
       if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
       if (a.agentId !== agentId) return false;
       if (a.date !== date) return false;
       
-      // Check for time overlap
+      // Check for time overlap - handle optional endTime with 1 hour minimum assumption
       const aStart = a.startTime;
-      const aEnd = a.endTime;
+      const aEnd = a.endTime || (() => {
+        const [hours, mins] = a.startTime.split(':').map(Number);
+        const endHour = Math.min(hours + 1, 23);
+        return `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      })();
       // Overlap exists if: start < otherEnd AND end > otherStart
-      return startTime < aEnd && endTime > aStart;
+      return startTime < aEnd && effectiveEndTime > aStart;
     });
     
     return conflictingAppointments.length > 0;
@@ -508,7 +529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getAgentsFreeForSlot = useCallback((
     date: string,
     startTime: string,
-    endTime: string,
+    endTime?: string,
     excludeAppointmentId?: string
   ): Agent[] => {
     return agents.filter(agent => {
@@ -518,7 +539,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const hasSlotAvailable = agent.availability.some(slot => 
         slot.date === date && 
         slot.startTime === startTime && 
-        slot.endTime === endTime && 
+        (!endTime || slot.endTime === endTime) && 
         !slot.isBooked
       );
       
@@ -617,7 +638,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (a.id === id) return false; // Exclude current appointment
         if (a.agentId !== agent.id) return false;
         if (a.date !== appointment.date) return false;
-        return appointment.startTime < a.endTime && appointment.endTime > a.startTime;
+        // Handle optional endTime
+        const apptEndTime = appointment.endTime || appointment.startTime;
+        const aEndTime = a.endTime || a.startTime;
+        return appointment.startTime < aEndTime && apptEndTime > a.startTime;
       }).length > 0;
       
       return hasSlotAvailable && !hasConflict;
@@ -833,6 +857,185 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAdminAlerts(prev => [...prev, newAlert]);
   }, [appointments, agents, currentUser, changeAgent]);
 
+  // Mark appointment as done - viewing finished, property still available
+  const markAppointmentDone = useCallback((id: string) => {
+    const appointment = appointments.find(a => a.id === id);
+    if (!appointment) return;
+
+    const property = properties.find(p => p.id === appointment.propertyId);
+    
+    // Calculate end time - use current time if after start time, otherwise use start time + 1 hour
+    const now = new Date();
+    const currentTimeStr = now.toTimeString().slice(0, 5);
+    const appointmentStartTime = appointment.startTime;
+    
+    // If current time is before start time, use start time + 1 hour as default duration
+    let endTimeValue: string;
+    if (currentTimeStr >= appointmentStartTime) {
+      endTimeValue = currentTimeStr;
+    } else {
+      // Parse start time and add 1 hour
+      const [hours, mins] = appointmentStartTime.split(':').map(Number);
+      const endHour = Math.min(hours + 1, 23); // Cap at 23:xx
+      endTimeValue = `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+    
+    // Update appointment status to 'done' and set end time
+    setAppointments(prev => prev.map(a => 
+      a.id === id ? { 
+        ...a, 
+        status: 'done',
+        endTime: endTimeValue
+      } : a
+    ));
+
+    // Check if there are other active viewings for this property
+    const otherActiveViewings = appointments.filter(a => 
+      a.propertyId === appointment.propertyId &&
+      a.id !== id &&
+      !['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)
+    );
+
+    // If no other active viewings, make property available again
+    if (otherActiveViewings.length === 0) {
+      updatePropertyStatus(appointment.propertyId, 'available');
+      
+      // Clear first viewer if this was the first viewer's appointment
+      setProperties(prev => prev.map(p => 
+        p.id === appointment.propertyId && p.firstViewerCustomerId === appointment.customerId
+          ? { ...p, firstViewerCustomerId: undefined, firstViewerTimestamp: undefined }
+          : p
+      ));
+    }
+
+    // Notify customer about viewing completion
+    addNotification({
+      userId: appointment.customerId,
+      type: 'viewing_done',
+      title: 'Viewing Completed',
+      message: `Your viewing for ${property?.title || 'a property'} has been completed. The property is now available for other bookings.`,
+      read: false,
+      relatedId: id,
+    });
+
+    // Notify queued customers that property is now available for booking
+    const queuedAppointments = appointments.filter(a => 
+      a.propertyId === appointment.propertyId &&
+      a.id !== id &&
+      a.customerId !== appointment.customerId &&
+      ['pending', 'pending_approval'].includes(a.status)
+    );
+
+    queuedAppointments.forEach(queuedAppt => {
+      addNotification({
+        userId: queuedAppt.customerId,
+        type: 'property_available',
+        title: 'Property Available',
+        message: `A prior viewing for ${property?.title || 'a property'} has completed. Your viewing can proceed.`,
+        read: false,
+        relatedId: queuedAppt.id,
+      });
+    });
+  }, [appointments, properties, updatePropertyStatus, addNotification]);
+
+  // Mark appointment as sold - property purchased and no longer available
+  const markAppointmentSold = useCallback((id: string) => {
+    const appointment = appointments.find(a => a.id === id);
+    if (!appointment) return;
+
+    const property = properties.find(p => p.id === appointment.propertyId);
+    const agent = agents.find(a => a.id === appointment.agentId);
+    
+    // Calculate end time - use current time if after start time, otherwise use start time + 1 hour
+    const now = new Date();
+    const currentTimeStr = now.toTimeString().slice(0, 5);
+    const appointmentStartTime = appointment.startTime;
+    
+    let endTimeValue: string;
+    if (currentTimeStr >= appointmentStartTime) {
+      endTimeValue = currentTimeStr;
+    } else {
+      const [hours, mins] = appointmentStartTime.split(':').map(Number);
+      const endHour = Math.min(hours + 1, 23);
+      endTimeValue = `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+    
+    // Update appointment status to 'sold' and set end time
+    setAppointments(prev => prev.map(a => 
+      a.id === id ? { 
+        ...a, 
+        status: 'sold',
+        endTime: endTimeValue
+      } : a
+    ));
+
+    // Update property status to 'sold'
+    updatePropertyStatus(appointment.propertyId, 'sold');
+
+    // Update agent's sold properties and sales count
+    if (agent) {
+      setAgents(prev => prev.map(a => 
+        a.id === appointment.agentId ? {
+          ...a,
+          salesCount: a.salesCount + 1,
+          soldProperties: [...a.soldProperties, appointment.propertyId]
+        } : a
+      ));
+    }
+
+    // Cancel all other pending appointments for this property
+    const otherAppointments = appointments.filter(a => 
+      a.propertyId === appointment.propertyId &&
+      a.id !== id &&
+      !['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)
+    );
+
+    otherAppointments.forEach(otherAppt => {
+      setAppointments(prev => prev.map(a => 
+        a.id === otherAppt.id ? { ...a, status: 'cancelled' } : a
+      ));
+
+      // Notify customers that property is no longer available
+      addNotification({
+        userId: otherAppt.customerId,
+        type: 'property_sold',
+        title: 'Property Sold',
+        message: `The property "${property?.title || 'a property'}" has been sold. Your viewing has been cancelled.`,
+        read: false,
+        relatedId: otherAppt.id,
+      });
+    });
+
+    // Notify the buyer (customer who completed the sale)
+    addNotification({
+      userId: appointment.customerId,
+      type: 'property_sold',
+      title: 'Congratulations!',
+      message: `You have successfully purchased ${property?.title || 'a property'}. Our team will contact you for the next steps.`,
+      read: false,
+      relatedId: id,
+    });
+  }, [appointments, properties, agents, updatePropertyStatus, addNotification]);
+
+  // Get all sold properties
+  const getSoldProperties = useCallback(() => {
+    return properties.filter(p => p.status === 'sold');
+  }, [properties]);
+
+  // Get properties available for customer booking (excludes sold properties)
+  const getAvailablePropertiesForBooking = useCallback(() => {
+    return properties.filter(p => p.status !== 'sold');
+  }, [properties]);
+
+  // Check if property has pending viewings that haven't been marked done
+  const hasPendingViewingsForProperty = useCallback((propertyId: string, excludeCustomerId?: string): boolean => {
+    return appointments.some(a => 
+      a.propertyId === propertyId &&
+      (excludeCustomerId ? a.customerId !== excludeCustomerId : true) &&
+      ['pending', 'pending_approval', 'accepted', 'scheduled'].includes(a.status)
+    );
+  }, [appointments]);
+
   const value: AppContextType = {
     currentUser,
     setCurrentUser,
@@ -870,6 +1073,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectDifferentAgent,
     hasAgentConflict,
     getAgentsFreeForSlot,
+    markAppointmentDone,
+    markAppointmentSold,
+    getSoldProperties,
+    getAvailablePropertiesForBooking,
+    hasPendingViewingsForProperty,
     getPurchasePriorityQueue,
     getCustomerPriorityPosition,
     isDateWithinBookingWindow,

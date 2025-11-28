@@ -76,13 +76,20 @@ export default function AgentCalendar() {
   const getBufferSlotsForDate = (date: Date): string[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const completedAppts = agentAppointments.filter(a => 
-      a.date === dateStr && a.status === 'completed'
+      a.date === dateStr && (a.status === 'completed' || a.status === 'done')
     );
     
     const bufferTimes: string[] = [];
     completedAppts.forEach(appt => {
       // Add buffer for 2 hours after end time
-      const [hours, mins] = appt.endTime.split(':').map(Number);
+      // If no endTime, use startTime + 1 hour as minimum duration
+      let endTimeStr = appt.endTime;
+      if (!endTimeStr) {
+        const [startHours, startMins] = appt.startTime.split(':').map(Number);
+        const defaultEndHour = Math.min(startHours + 1, 23);
+        endTimeStr = `${String(defaultEndHour).padStart(2, '0')}:${String(startMins).padStart(2, '0')}`;
+      }
+      const [hours, mins] = endTimeStr.split(':').map(Number);
       for (let i = 0; i < 2; i++) {
         const bufferHour = hours + i;
         if (bufferHour < 18) { // Don't buffer past 6 PM

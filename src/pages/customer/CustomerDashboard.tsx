@@ -50,7 +50,7 @@ export default function CustomerDashboard() {
 
   // Filter appointments based on active tab
   const filteredAppointments = customerAppointments.filter(a => {
-    if (activeTab === 'all') return a.status !== 'cancelled' && a.status !== 'completed';
+    if (activeTab === 'all') return !['cancelled', 'completed', 'done', 'sold'].includes(a.status);
     if (activeTab === 'accepted') return a.status === 'accepted' || a.status === 'scheduled';
     if (activeTab === 'pending') return a.status === 'pending' || a.status === 'pending_approval';
     if (activeTab === 'rejected') return a.status === 'rejected';
@@ -63,7 +63,9 @@ export default function CustomerDashboard() {
     return a.startTime.localeCompare(b.startTime);
   });
 
-  const pastAppointments = customerAppointments.filter(a => a.status === 'completed' || a.status === 'cancelled');
+  const pastAppointments = customerAppointments.filter(a => 
+    a.status === 'completed' || a.status === 'cancelled' || a.status === 'done' || a.status === 'sold'
+  );
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -73,6 +75,8 @@ export default function CustomerDashboard() {
       case 'rejected': return 'bg-red-100 text-red-800';
       case 'scheduled': return 'bg-blue-100 text-blue-800';
       case 'completed': return 'bg-gray-100 text-gray-800';
+      case 'done': return 'bg-gray-100 text-gray-800';
+      case 'sold': return 'bg-purple-100 text-purple-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -86,13 +90,17 @@ export default function CustomerDashboard() {
       case 'rejected': return 'Declined';
       case 'scheduled': return 'Scheduled';
       case 'completed': return 'Completed';
+      case 'done': return 'Viewing Done';
+      case 'sold': return 'Property Purchased';
       case 'cancelled': return 'Cancelled';
       default: return status;
     }
   };
 
   const tabs = [
-    { id: 'all' as TabStatus, label: 'All', count: customerAppointments.filter(a => a.status !== 'cancelled' && a.status !== 'completed').length },
+    { id: 'all' as TabStatus, label: 'All', count: customerAppointments.filter(a => 
+      !['cancelled', 'completed', 'done', 'sold'].includes(a.status)
+    ).length },
     { id: 'accepted' as TabStatus, label: 'Accepted', count: acceptedCount },
     { id: 'pending' as TabStatus, label: 'Pending', count: pendingCount },
     { id: 'rejected' as TabStatus, label: 'Rejected', count: rejectedCount },

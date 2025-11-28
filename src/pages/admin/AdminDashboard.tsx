@@ -5,6 +5,8 @@ import { formatDate, formatTimeRange, formatRelativeTime, getInitials, formatCur
 import type { Appointment } from '../../types';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 
+type AdminTab = 'overview' | 'sold';
+
 export default function AdminDashboard() {
   const {
     currentUser,
@@ -29,6 +31,7 @@ export default function AdminDashboard() {
   const [resolvingAlertId, setResolvingAlertId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [overrideError, setOverrideError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
 
   // Redirect if not logged in as admin
   if (!currentUser || currentUser.role !== 'admin') {
@@ -41,6 +44,9 @@ export default function AdminDashboard() {
 
   const pendingAlerts = adminAlerts.filter(a => a.status === 'pending');
   const resolvedAlerts = adminAlerts.filter(a => a.status === 'resolved');
+  
+  // Get sold properties
+  const soldProperties = getSoldProperties();
   
   // Get all active appointments (not cancelled or completed)
   const activeAppointments = appointments.filter(a => 
@@ -121,6 +127,49 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Dashboard Tabs */}
+        <div className="bg-white rounded-lg shadow-md mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'overview'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span>Overview</span>
+                {activeAppointments.length > 0 && (
+                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
+                    activeTab === 'overview' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {activeAppointments.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('sold')}
+                className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'sold'
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span>Sold Properties</span>
+                {soldProperties.length > 0 && (
+                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
+                    activeTab === 'sold' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {soldProperties.length}
+                  </span>
+                )}
+              </button>
+            </nav>
+          </div>
+        </div>
+
+        {activeTab === 'overview' && (
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
@@ -534,6 +583,70 @@ export default function AdminDashboard() {
             )}
           </div>
         </div>
+        )}
+
+        {/* Sold Properties Tab Content */}
+        {activeTab === 'sold' && (
+          <div className="bg-white rounded-lg shadow-md">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Sold Properties</h2>
+              <p className="text-sm text-gray-500 mt-1">All properties that have been sold</p>
+            </div>
+            <div className="p-6">
+              {soldProperties.length === 0 ? (
+                <div className="text-center py-8">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <p className="text-gray-500 mb-2">No sold properties yet</p>
+                  <p className="text-sm text-gray-400">Properties will appear here when agents mark them as sold.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {soldProperties.map(property => {
+                    const soldAppointment = appointments.find(a => 
+                      a.propertyId === property.id && a.status === 'sold'
+                    );
+                    const soldByAgent = soldAppointment ? getAgent(soldAppointment.agentId) : null;
+                    const buyer = soldAppointment ? getCustomer(soldAppointment.customerId) : null;
+                    
+                    return (
+                      <div key={property.id} className="border rounded-lg p-4 bg-purple-50 border-purple-200">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-lg text-gray-900">{property.title}</h4>
+                            <p className="text-gray-600 text-sm">{property.address}, {property.city}</p>
+                          </div>
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                            SOLD
+                          </span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-500">Sale Price</p>
+                            <p className="font-medium text-purple-700">{formatCurrency(property.price)}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Sold By</p>
+                            <p className="font-medium">{soldByAgent?.name || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Buyer</p>
+                            <p className="font-medium">{buyer?.name || 'Unknown'}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500">Sale Date</p>
+                            <p className="font-medium">{soldAppointment ? formatDate(soldAppointment.date) : 'Unknown'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Appointment Detail Modal */}

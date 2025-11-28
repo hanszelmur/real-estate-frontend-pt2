@@ -80,7 +80,7 @@ export interface Appointment {
   agentId: string;
   date: string;
   startTime: string;
-  endTime: string;
+  endTime?: string; // Optional - agent controls when viewing ends
   /**
    * Appointment status flow:
    * - 'pending': Initial state after customer booking - awaiting agent confirmation
@@ -88,10 +88,12 @@ export interface Appointment {
    * - 'accepted': Agent has confirmed the appointment
    * - 'rejected': Agent has declined the appointment
    * - 'scheduled': Appointment is confirmed and scheduled (legacy/alternative to accepted)
-   * - 'completed': Appointment has been completed
+   * - 'completed': Appointment has been completed (legacy - use 'done' for new flow)
+   * - 'done': Agent marked viewing as finished, property still available
+   * - 'sold': Agent marked property as sold during/after viewing
    * - 'cancelled': Appointment was cancelled by customer or admin
    */
-  status: 'pending' | 'pending_approval' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled';
+  status: 'pending' | 'pending_approval' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled' | 'done' | 'sold';
   // Race logic fields
   hasViewingRights: boolean;
   hasPurchaseRights: boolean;
@@ -121,6 +123,7 @@ export interface AppointmentMessage {
 export interface Notification {
   id: string;
   userId: string;
+  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'viewing_done' | 'property_sold' | 'property_available' | 'viewing_queued';
   type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'priority_promoted' | 'appointment_cancelled';
   title: string;
   message: string;

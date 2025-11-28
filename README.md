@@ -126,6 +126,86 @@ All screenshots are current as of the latest release. Each image is annotated wi
 
 ## 🔧 Core System Rules & Logic
 
+### Enhanced Booking & Sales Completion Flow
+
+This system implements an enhanced booking flow with exclusive/shared property viewings, agent-controlled appointment completion, and property state transitions.
+
+#### Appointment Status Flow
+
+```
+┌─────────────┐     Agent      ┌──────────┐
+│   PENDING   │ ─── Accept ──▶ │ ACCEPTED │
+└─────────────┘                └──────────┘
+       │                            │
+       │ Agent                      │ Agent Action
+       │ Reject                     ▼
+       │                    ┌───────────────┐
+       ▼                    │  DONE or SOLD │
+┌──────────────────┐        └───────────────┘
+│ PENDING_APPROVAL │               │
+│ (new agent auto- │               │
+│  assigned)       │               │
+└──────────────────┘               │
+       │                           ▼
+       │ Customer             ┌─────────┐
+       │ Approve              │ Property│
+       ▼                      │ State   │
+┌─────────────┐               │ Change  │
+│   PENDING   │               └─────────┘
+└─────────────┘
+```
+
+#### Status Behavior Summary Table
+
+| Status | Description | Property Available? | Customer Action | Agent Action |
+|--------|-------------|---------------------|-----------------|--------------|
+| `pending` | Awaiting agent confirmation | Pending (first viewer) | Wait | Accept/Reject |
+| `pending_approval` | New agent assigned, needs customer approval | Pending | Approve agent or Select different | Wait |
+| `accepted` | Viewing confirmed | Pending | Attend viewing | Mark Done/Sold |
+| `done` | Viewing finished, no purchase | ✅ Available | - | - |
+| `sold` | Property purchased | ❌ Sold | - | - |
+| `rejected` | Agent declined | Depends | Select new agent | - |
+| `cancelled` | Booking cancelled | Depends | - | - |
+
+#### Agent Appointment Completion Actions
+
+When an agent has an accepted appointment, they control when and how the viewing ends:
+
+1. **Mark as Done** (`done` status):
+   - Viewing finished, customer did not purchase
+   - Property immediately becomes available for new bookings
+   - Queued customers are notified that property is available
+   - Agent's buffer period (2 hours) applies
+
+2. **Mark as Sold** (`sold` status):
+   - Property purchased by customer
+   - Property status changes to `sold`
+   - Property hidden from customer search/booking
+   - All other pending viewings for this property are cancelled
+   - Affected customers receive cancellation notification
+   - Agent's sales count incremented
+   - Property added to Agent's "Sold Properties" tab
+
+#### Property Visibility Rules
+
+| User Role | Available | Pending | Sold |
+|-----------|-----------|---------|------|
+| Customer/Public | ✅ Visible | ✅ Visible | ❌ Hidden |
+| Agent | ✅ Visible | ✅ Visible | ✅ Visible (Sold tab) |
+| Admin | ✅ Visible | ✅ Visible | ✅ Visible (Sold tab) |
+
+#### Notification Flow for Status Changes
+
+| Event | Recipient | Notification Type |
+|-------|-----------|-------------------|
+| Viewing marked done | Customer | `viewing_done` |
+| Property becomes available | Queued customers | `property_available` |
+| Property sold | Buyer | `property_sold` (congratulations) |
+| Property sold | Other customers with pending viewings | `property_sold` (cancelled) |
+
+### Booking Flow
+```
+1. Customer selects property → Chooses agent (or auto-assign) → Selects START TIME only
 ### 7-Day Rolling Booking Window
 ```
 CONSTANT BOOKING_WINDOW_DAYS = 7
@@ -175,6 +255,7 @@ WHEN customer cancels appointment:
 2. Booking submitted as PENDING → Agent notified
 3. Agent ACCEPTS or REJECTS → Customer notified
 4. If rejected: System auto-assigns new available agent → Customer approves or selects different
+5. Agent conducts viewing → Marks as DONE (available) or SOLD (purchased)
 ```
 
 ### Buffer/Slot/Availability Logic
@@ -247,6 +328,16 @@ FUNCTION markPropertySold(propertyId, salePrice, agentId):
 
 ## ⚠️ DO NOT BREAK - Business Rules
 
+1. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times
+2. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing (done or sold status)
+3. **Race Logic**: First viewer ALWAYS gets purchase rights
+4. **SMS Verification**: BOTH parties must be verified for messaging to work
+5. **Priority Warning**: NEVER show "another customer has priority" to the firstViewerCustomerId
+6. **Blacklist Respect**: NEVER assign blacklisted agents to a customer
+7. **Sold Property Visibility**: NEVER show sold properties in customer/public property listings
+8. **Agent-Only Completion**: ONLY agents can mark appointments as done or sold
+9. **Cascade Cancellation**: When property is marked sold, ALL other pending appointments for that property must be cancelled automatically
+10. **Instant Availability**: When marked done, property MUST become immediately available for new bookings
 1. **7-Day Booking Window**: NEVER allow bookings beyond 7 days from today
 2. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times (global across all properties)
 3. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing
@@ -426,6 +517,11 @@ All notifications are **system-generated** and one-way. Users cannot reply to no
 | `agent_reassigned` | Customer | New agent auto-assigned after rejection |
 | `no_agents_available` | Customer | No agents available for slot |
 | `viewing_only` | Customer | Another customer has priority |
+| `viewing_done` | Customer | Agent marked viewing as completed |
+| `property_available` | Queued customers | Property became available after viewing |
+| `property_sold` | Buyer | Congratulations on purchase |
+| `property_sold` | Other customers | Pending viewing cancelled due to sale |
+| `viewing_queued` | Customer | Viewing queued due to prior bookings |
 
 ### Messaging (Two-Way Chat)
 - **Requirements**: Both customer AND agent must be SMS verified
@@ -490,6 +586,16 @@ addNotification({
 - ✅ Fixed priority warning logic
 - ✅ Comprehensive README documentation
 
+### Enhanced Booking & Sales Update (Latest)
+- ✅ **Agent-controlled appointment completion**: Agents can mark viewings as 'done' or 'sold'
+- ✅ **Instant property availability**: Property becomes available immediately when marked done
+- ✅ **Sold property handling**: Properties marked sold are hidden from customer search
+- ✅ **Sold Properties tab**: New tab in Agent and Admin dashboards showing sold properties
+- ✅ **Cascade notifications**: Customers notified when property becomes available or is sold
+- ✅ **New appointment statuses**: Added 'done' and 'sold' status types
+- ✅ **Agent sales tracking**: Sales count and sold properties list updated on sale
+
+### Previous Updates
 ### Initial Release
 - Initial booking flow implementation
 - Race logic for property purchase rights

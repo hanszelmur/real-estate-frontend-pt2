@@ -38,7 +38,10 @@ export function formatTime(time: string): string {
 }
 
 // Format time range
-export function formatTimeRange(startTime: string, endTime: string): string {
+export function formatTimeRange(startTime: string, endTime?: string): string {
+  if (!endTime) {
+    return formatTime(startTime);
+  }
   return `${formatTime(startTime)} - ${formatTime(endTime)}`;
 }
 
