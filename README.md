@@ -203,9 +203,6 @@ When an agent has an accepted appointment, they control when and how the viewing
 | Property sold | Buyer | `property_sold` (congratulations) |
 | Property sold | Other customers with pending viewings | `property_sold` (cancelled) |
 
-### Booking Flow
-```
-1. Customer selects property → Chooses agent (or auto-assign) → Selects START TIME only
 ### 7-Day Rolling Booking Window
 ```
 CONSTANT BOOKING_WINDOW_DAYS = 7
@@ -218,6 +215,15 @@ FUNCTION isDateWithinBookingWindow(dateString):
 
 // Enforced in BookingModal when showing available time slots
 // Prevents bookings or purchase holds beyond this window
+```
+
+### Booking Flow
+```
+1. Customer selects property → Chooses agent (or auto-assign) → Selects time slot (within 7 days)
+2. Booking submitted as PENDING → Agent notified
+3. Agent ACCEPTS or REJECTS → Customer notified
+4. If rejected: System auto-assigns new available agent → Customer approves or selects different
+5. Agent conducts viewing → Marks as DONE (available) or SOLD (purchased)
 ```
 
 ### Purchase Priority Queue Logic
@@ -247,15 +253,6 @@ WHEN customer cancels appointment:
         c. Notify them of promotion
     4. IF no other customers in queue:
         a. Reset property status to 'available'
-```
-
-### Booking Flow
-```
-1. Customer selects property → Chooses agent (or auto-assign) → Selects time slot (within 7 days)
-2. Booking submitted as PENDING → Agent notified
-3. Agent ACCEPTS or REJECTS → Customer notified
-4. If rejected: System auto-assigns new available agent → Customer approves or selects different
-5. Agent conducts viewing → Marks as DONE (available) or SOLD (purchased)
 ```
 
 ### Buffer/Slot/Availability Logic
@@ -328,25 +325,20 @@ FUNCTION markPropertySold(propertyId, salePrice, agentId):
 
 ## ⚠️ DO NOT BREAK - Business Rules
 
-1. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times
-2. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing (done or sold status)
-3. **Race Logic**: First viewer ALWAYS gets purchase rights
-4. **SMS Verification**: BOTH parties must be verified for messaging to work
-5. **Priority Warning**: NEVER show "another customer has priority" to the firstViewerCustomerId
-6. **Blacklist Respect**: NEVER assign blacklisted agents to a customer
-7. **Sold Property Visibility**: NEVER show sold properties in customer/public property listings
-8. **Agent-Only Completion**: ONLY agents can mark appointments as done or sold
-9. **Cascade Cancellation**: When property is marked sold, ALL other pending appointments for that property must be cancelled automatically
-10. **Instant Availability**: When marked done, property MUST become immediately available for new bookings
 1. **7-Day Booking Window**: NEVER allow bookings beyond 7 days from today
 2. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times (global across all properties)
-3. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing
-4. **Purchase Priority**: Priority is ALWAYS by earliest booking timestamp, NOT viewing date
-5. **Priority Promotion**: When first-in-line cancels, ALWAYS promote next customer
-6. **SMS Verification**: BOTH parties must be verified for messaging to work
-7. **Priority Display**: Show priority position to ALL customers, not just first
-8. **Blacklist Respect**: NEVER assign blacklisted agents to a customer
-9. **Property Assignment**: Only assigned agent or admin can edit a property
+3. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing (done or sold status)
+4. **Race Logic**: First viewer ALWAYS gets purchase rights (by earliest booking timestamp, NOT viewing date)
+5. **Priority Promotion**: When first-in-line cancels, ALWAYS promote next customer automatically
+6. **Priority Display**: Show priority position to ALL customers, not just first
+7. **SMS Verification**: BOTH parties must be verified for messaging to work
+8. **Priority Warning**: NEVER show "another customer has priority" to the firstViewerCustomerId
+9. **Blacklist Respect**: NEVER assign blacklisted agents to a customer
+10. **Sold Property Visibility**: NEVER show sold properties in customer/public property listings
+11. **Agent-Only Completion**: ONLY agents can mark appointments as done or sold
+12. **Cascade Cancellation**: When property is marked sold, ALL other pending appointments for that property must be cancelled automatically
+13. **Instant Availability**: When marked done, property MUST become immediately available for new bookings
+14. **Property Assignment**: Only assigned agent or admin can edit a property
 
 ---
 
