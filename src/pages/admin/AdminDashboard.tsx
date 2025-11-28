@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { formatDate, formatTimeRange, formatRelativeTime, getInitials, formatCurrency } from '../../utils/helpers';
 import type { Appointment } from '../../types';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
+import AddPropertyModal from '../../components/common/AddPropertyModal';
 
 type AdminTab = 'overview' | 'sold';
 
@@ -32,6 +33,7 @@ export default function AdminDashboard() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
 
   // Redirect if not logged in as admin
   if (!currentUser || currentUser.role !== 'admin') {
@@ -121,8 +123,20 @@ export default function AdminDashboard() {
               <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
               <p className="text-gray-600 mt-1">Manage assignments, overrides, and global availability control</p>
             </div>
-            <div className="px-4 py-2 bg-purple-100 text-purple-800 rounded-lg text-sm">
-              Internal Admin Panel
+            <div className="flex items-center space-x-4">
+              {/* Add Property Button */}
+              <button
+                onClick={() => setShowAddPropertyModal(true)}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Property
+              </button>
+              <div className="px-4 py-2 bg-purple-100 text-purple-800 rounded-lg text-sm">
+                Internal Admin Panel
+              </div>
             </div>
           </div>
         </div>
@@ -658,6 +672,13 @@ export default function AdminDashboard() {
           customer={getCustomer(selectedAppointmentForDetail.customerId)}
           onClose={() => setSelectedAppointmentForDetail(null)}
           mode="admin"
+        />
+      )}
+
+      {/* Add Property Modal */}
+      {showAddPropertyModal && (
+        <AddPropertyModal
+          onClose={() => setShowAddPropertyModal(false)}
         />
       )}
     </div>
