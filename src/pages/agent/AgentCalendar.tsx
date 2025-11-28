@@ -82,7 +82,13 @@ export default function AgentCalendar() {
     const bufferTimes: string[] = [];
     completedAppts.forEach(appt => {
       // Add buffer for 2 hours after end time
-      const endTimeStr = appt.endTime || appt.startTime; // Default to startTime if no endTime
+      // If no endTime, use startTime + 1 hour as minimum duration
+      let endTimeStr = appt.endTime;
+      if (!endTimeStr) {
+        const [startHours, startMins] = appt.startTime.split(':').map(Number);
+        const defaultEndHour = Math.min(startHours + 1, 23);
+        endTimeStr = `${String(defaultEndHour).padStart(2, '0')}:${String(startMins).padStart(2, '0')}`;
+      }
       const [hours, mins] = endTimeStr.split(':').map(Number);
       for (let i = 0; i < 2; i++) {
         const bufferHour = hours + i;

@@ -370,17 +370,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     endTime?: string,
     excludeAppointmentId?: string
   ): boolean => {
-    const effectiveEndTime = endTime || startTime; // Default to startTime if not provided
+    // Use provided endTime or assume 1 hour duration as minimum
+    const effectiveEndTime = endTime || (() => {
+      const [hours, mins] = startTime.split(':').map(Number);
+      const endHour = Math.min(hours + 1, 23);
+      return `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    })();
+    
     const conflictingAppointments = appointments.filter(a => {
-      // Exclude cancelled/rejected appointments and the current appointment being changed
-      if (a.status === 'cancelled' || a.status === 'rejected') return false;
+      // Exclude cancelled/rejected/done/sold appointments and the current appointment being changed
+      if (['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)) return false;
       if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
       if (a.agentId !== agentId) return false;
       if (a.date !== date) return false;
       
-      // Check for time overlap - handle optional endTime
+      // Check for time overlap - handle optional endTime with 1 hour minimum assumption
       const aStart = a.startTime;
-      const aEnd = a.endTime || a.startTime; // Default to startTime if endTime not set
+      const aEnd = a.endTime || (() => {
+        const [hours, mins] = a.startTime.split(':').map(Number);
+        const endHour = Math.min(hours + 1, 23);
+        return `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      })();
       // Overlap exists if: start < otherEnd AND end > otherStart
       return startTime < aEnd && effectiveEndTime > aStart;
     });
@@ -690,12 +700,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const property = properties.find(p => p.id === appointment.propertyId);
     
+    // Calculate end time - use current time if after start time, otherwise use start time + 1 hour
+    const now = new Date();
+    const currentTimeStr = now.toTimeString().slice(0, 5);
+    const appointmentStartTime = appointment.startTime;
+    
+    // If current time is before start time, use start time + 1 hour as default duration
+    let endTimeValue: string;
+    if (currentTimeStr >= appointmentStartTime) {
+      endTimeValue = currentTimeStr;
+    } else {
+      // Parse start time and add 1 hour
+      const [hours, mins] = appointmentStartTime.split(':').map(Number);
+      const endHour = Math.min(hours + 1, 23); // Cap at 23:xx
+      endTimeValue = `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+    
     // Update appointment status to 'done' and set end time
     setAppointments(prev => prev.map(a => 
       a.id === id ? { 
         ...a, 
         status: 'done',
-        endTime: new Date().toTimeString().slice(0, 5) // Current time as HH:mm
+        endTime: endTimeValue
       } : a
     ));
 
@@ -756,12 +782,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const property = properties.find(p => p.id === appointment.propertyId);
     const agent = agents.find(a => a.id === appointment.agentId);
     
+    // Calculate end time - use current time if after start time, otherwise use start time + 1 hour
+    const now = new Date();
+    const currentTimeStr = now.toTimeString().slice(0, 5);
+    const appointmentStartTime = appointment.startTime;
+    
+    let endTimeValue: string;
+    if (currentTimeStr >= appointmentStartTime) {
+      endTimeValue = currentTimeStr;
+    } else {
+      const [hours, mins] = appointmentStartTime.split(':').map(Number);
+      const endHour = Math.min(hours + 1, 23);
+      endTimeValue = `${String(endHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+    }
+    
     // Update appointment status to 'sold' and set end time
     setAppointments(prev => prev.map(a => 
       a.id === id ? { 
         ...a, 
         status: 'sold',
-        endTime: new Date().toTimeString().slice(0, 5)
+        endTime: endTimeValue
       } : a
     ));
 
