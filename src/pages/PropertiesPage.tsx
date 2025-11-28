@@ -3,14 +3,20 @@ import { useApp } from '../context/AppContext';
 import PropertyCard from '../components/common/PropertyCard';
 
 export default function PropertiesPage() {
-  const { properties } = useApp();
+  const { properties, currentUser } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<string>('all');
   const [bedroomFilter, setBedroomFilter] = useState<string>('all');
 
-  // Filter properties
+  // Check if user is customer (or not logged in - public view)
+  const isCustomerView = !currentUser || currentUser.role === 'customer';
+
+  // Filter properties - hide sold properties from customer view
   const filteredProperties = properties.filter(property => {
-    // Status filter
+    // Hide sold properties from customers/public view
+    if (isCustomerView && property.status === 'sold') return false;
+    
+    // Status filter (only show sold option for agents/admins)
     if (statusFilter !== 'all' && property.status !== statusFilter) return false;
     
     // Price range filter
@@ -60,7 +66,8 @@ export default function PropertiesPage() {
                 <option value="all">All Statuses</option>
                 <option value="available">Available</option>
                 <option value="pending">Pending</option>
-                <option value="sold">Sold</option>
+                {/* Only show Sold option for agents/admins */}
+                {!isCustomerView && <option value="sold">Sold</option>}
               </select>
             </div>
 

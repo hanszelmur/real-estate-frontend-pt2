@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import type { Agent, Appointment } from '../../types';
-import { formatDate, formatTimeRange, generateStars } from '../../utils/helpers';
+import { formatDate, formatTimeRange, generateStars, formatCurrency } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
+
+type DashboardTab = 'appointments' | 'sold';
 
 export default function AgentDashboard() {
   const {
@@ -16,9 +18,11 @@ export default function AgentDashboard() {
     updateAgentSmsVerification,
     getNotificationsByUser,
     markNotificationRead,
+    getSoldProperties,
   } = useApp();
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [activeTab, setActiveTab] = useState<DashboardTab>('appointments');
 
   // Redirect if not logged in as agent
   if (!currentUser || currentUser.role !== 'agent') {
@@ -43,6 +47,9 @@ export default function AgentDashboard() {
   const pendingAppointments = agentAppointments.filter(a => a.status === 'pending');
   const confirmedAppointments = agentAppointments.filter(a => a.status === 'accepted' || a.status === 'scheduled');
   
+  // Get sold properties by this agent
+  const soldProperties = getSoldProperties().filter(p => agent.soldProperties.includes(p.id));
+
   // Get property info
   const getProperty = (id: string) => properties.find(p => p.id === id);
   const getCustomer = (id: string) => users.find(u => u.id === id);
@@ -59,6 +66,8 @@ export default function AgentDashboard() {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'accepted': return 'bg-green-100 text-green-800';
       case 'scheduled': return 'bg-blue-100 text-blue-800';
+      case 'done': return 'bg-gray-100 text-gray-800';
+      case 'sold': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -121,19 +130,64 @@ export default function AgentDashboard() {
           </div>
         )}
 
+        {/* Dashboard Tabs */}
+        <div className="bg-white rounded-lg shadow-md mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              <button
+                onClick={() => setActiveTab('appointments')}
+                className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'appointments'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span>Appointments</span>
+                {(pendingAppointments.length + confirmedAppointments.length) > 0 && (
+                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
+                    activeTab === 'appointments' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {pendingAppointments.length + confirmedAppointments.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('sold')}
+                className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'sold'
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span>Sold Properties</span>
+                {soldProperties.length > 0 && (
+                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
+                    activeTab === 'sold' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {soldProperties.length}
+                  </span>
+                )}
+              </button>
+            </nav>
+          </div>
+        </div>
+
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Pending Appointments - Require Action */}
-            {pendingAppointments.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md border-2 border-yellow-400">
-                <div className="px-6 py-4 border-b border-gray-200 bg-yellow-50">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-yellow-800">
-                      Action Required ({pendingAppointments.length})
-                    </h2>
-                    <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-sm rounded-full font-medium">
-                      Pending Approval
+            {/* Appointments Tab Content */}
+            {activeTab === 'appointments' && (
+              <>
+                {/* Pending Appointments - Require Action */}
+                {pendingAppointments.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-md border-2 border-yellow-400">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-yellow-50">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-semibold text-yellow-800">
+                          Action Required ({pendingAppointments.length})
+                        </h2>
+                        <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-sm rounded-full font-medium">
+                          Pending Approval
                     </span>
                   </div>
                   <p className="text-sm text-yellow-700 mt-1">Accept or reject these booking requests</p>
@@ -247,6 +301,59 @@ export default function AgentDashboard() {
                 </Link>
               </div>
             </div>
+              </>
+            )}
+
+            {/* Sold Properties Tab Content */}
+            {activeTab === 'sold' && (
+              <div className="bg-white rounded-lg shadow-md">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Sold Properties</h2>
+                  <p className="text-sm text-gray-500 mt-1">Properties you&apos;ve successfully sold</p>
+                </div>
+                <div className="p-6">
+                  {soldProperties.length === 0 ? (
+                    <div className="text-center py-8">
+                      <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      <p className="text-gray-500 mb-2">No sold properties yet</p>
+                      <p className="text-sm text-gray-400">Complete viewings and mark properties as sold to see them here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {soldProperties.map(property => (
+                        <div key={property.id} className="border rounded-lg p-4 bg-purple-50 border-purple-200">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-lg text-gray-900">{property.title}</h4>
+                              <p className="text-gray-600 text-sm">{property.address}, {property.city}</p>
+                            </div>
+                            <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+                              SOLD
+                            </span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-500">Price</p>
+                              <p className="font-medium text-purple-700">{formatCurrency(property.price)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">Bedrooms</p>
+                              <p className="font-medium">{property.bedrooms}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">Area</p>
+                              <p className="font-medium">{property.sqft} sqm</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}

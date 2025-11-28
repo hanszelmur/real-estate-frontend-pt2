@@ -31,6 +31,8 @@ export default function AppointmentDetailModal({
     canMessage,
     getMessagesByAppointment,
     sendMessage,
+    markAppointmentDone,
+    markAppointmentSold,
   } = useApp();
 
   const [showOverride, setShowOverride] = useState(false);
@@ -42,6 +44,8 @@ export default function AppointmentDetailModal({
   const [showMessaging, setShowMessaging] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showDoneConfirm, setShowDoneConfirm] = useState(false);
+  const [showSoldConfirm, setShowSoldConfirm] = useState(false);
 
   const messages = getMessagesByAppointment(appointment.id);
   const messagingEnabled = canMessage(appointment.id);
@@ -94,6 +98,16 @@ export default function AppointmentDetailModal({
     }
   };
 
+  const handleMarkDone = () => {
+    markAppointmentDone(appointment.id);
+    onClose();
+  };
+
+  const handleMarkSold = () => {
+    markAppointmentSold(appointment.id);
+    onClose();
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -101,6 +115,8 @@ export default function AppointmentDetailModal({
       case 'rejected': return 'bg-red-100 text-red-800';
       case 'scheduled': return 'bg-blue-100 text-blue-800';
       case 'completed': return 'bg-gray-100 text-gray-800';
+      case 'done': return 'bg-gray-100 text-gray-800';
+      case 'sold': return 'bg-purple-100 text-purple-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -463,12 +479,92 @@ export default function AppointmentDetailModal({
               </div>
             )}
 
-            {/* Accepted status info */}
+            {/* Accepted appointment - Done/Sold actions */}
             {mode === 'agent' && appointment.status === 'accepted' && (
               <div className="mt-6 pt-4 border-t">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm text-green-700">
-                    ✓ You have accepted this appointment. The customer has been notified.
+                <h3 className="text-sm font-medium text-gray-500 mb-3">Viewing Actions</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  When the viewing is complete, mark it as &quot;Done&quot; to make the property available again, 
+                  or &quot;Sold&quot; if the customer is purchasing this property.
+                </p>
+                
+                {showDoneConfirm ? (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700 mb-3">
+                      Mark this viewing as done? The property will become available for new bookings.
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setShowDoneConfirm(false)}
+                        className="flex-1 px-3 py-2 text-sm text-gray-600 bg-white border rounded-md hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleMarkDone}
+                        className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      >
+                        Confirm Done
+                      </button>
+                    </div>
+                  </div>
+                ) : showSoldConfirm ? (
+                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <p className="text-sm text-purple-700 mb-3">
+                      Mark this property as sold? The property will be removed from listings 
+                      and all other pending viewings will be cancelled.
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setShowSoldConfirm(false)}
+                        className="flex-1 px-3 py-2 text-sm text-gray-600 bg-white border rounded-md hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleMarkSold}
+                        className="flex-1 px-3 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                      >
+                        Confirm Sale
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => setShowDoneConfirm(true)}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                    >
+                      Mark as Done
+                    </button>
+                    <button
+                      onClick={() => setShowSoldConfirm(true)}
+                      className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                    >
+                      Mark as Sold
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Done status info */}
+            {mode === 'agent' && appointment.status === 'done' && (
+              <div className="mt-6 pt-4 border-t">
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    ✓ This viewing has been completed. The property is available for new bookings.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Sold status info */}
+            {mode === 'agent' && appointment.status === 'sold' && (
+              <div className="mt-6 pt-4 border-t">
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                  <p className="text-sm text-purple-700">
+                    ✓ This property has been sold! Congratulations on the successful sale.
                   </p>
                 </div>
               </div>
