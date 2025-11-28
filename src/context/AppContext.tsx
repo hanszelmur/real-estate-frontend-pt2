@@ -55,11 +55,8 @@ interface AppContextType {
   getAgentsFreeForSlot: (date: string, startTime: string, endTime?: string, excludeAppointmentId?: string) => Agent[];
   markAppointmentDone: (id: string) => void;
   markAppointmentSold: (id: string) => void;
-  getSoldProperties: () => Property[];
   getAvailablePropertiesForBooking: () => Property[];
   hasPendingViewingsForProperty: (propertyId: string, excludeCustomerId?: string) => boolean;
-  hasAgentConflict: (agentId: string, date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => boolean;
-  getAgentsFreeForSlot: (date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => Agent[];
   
   // Priority queue functions
   getPurchasePriorityQueue: (propertyId: string) => Appointment[];
@@ -1017,11 +1014,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, [appointments, properties, agents, updatePropertyStatus, addNotification]);
 
-  // Get all sold properties
-  const getSoldProperties = useCallback(() => {
-    return properties.filter(p => p.status === 'sold');
-  }, [properties]);
-
   // Get properties available for customer booking (excludes sold properties)
   const getAvailablePropertiesForBooking = useCallback(() => {
     return properties.filter(p => p.status !== 'sold');
@@ -1075,7 +1067,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getAgentsFreeForSlot,
     markAppointmentDone,
     markAppointmentSold,
-    getSoldProperties,
     getAvailablePropertiesForBooking,
     hasPendingViewingsForProperty,
     getPurchasePriorityQueue,
