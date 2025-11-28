@@ -14,7 +14,8 @@ export default function CustomerDashboard() {
     properties, 
     agents, 
     getNotificationsByUser,
-    markNotificationRead
+    markNotificationRead,
+    getCustomerPriorityPosition,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabStatus>('all');
@@ -31,6 +32,16 @@ export default function CustomerDashboard() {
 
   const getProperty = (id: string) => properties.find(p => p.id === id);
   const getAgent = (id: string) => agents.find(a => a.id === id);
+  
+  // Helper to get priority position text
+  const getPriorityBadgeText = (propertyId: string) => {
+    const position = getCustomerPriorityPosition(propertyId, currentUser.id);
+    if (position === 1) return '1st in line';
+    if (position === 2) return '2nd in line';
+    if (position === 3) return '3rd in line';
+    if (position > 0) return `${position}th in line`;
+    return '';
+  };
 
   // Count appointments by status
   const acceptedCount = customerAppointments.filter(a => a.status === 'accepted' || a.status === 'scheduled').length;
@@ -181,9 +192,14 @@ export default function CustomerDashboard() {
                               <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
                                 {getStatusLabel(appointment.status)}
                               </span>
-                              {!appointment.hasPurchaseRights && (
-                                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                                  Viewing Only
+                              {/* Priority Status Badge */}
+                              {appointment.status !== 'cancelled' && appointment.status !== 'rejected' && (
+                                <span className={`px-2 py-1 text-xs rounded-full ${
+                                  getCustomerPriorityPosition(appointment.propertyId, currentUser.id) === 1
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {getPriorityBadgeText(appointment.propertyId)}
                                 </span>
                               )}
                             </div>

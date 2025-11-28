@@ -4,6 +4,9 @@ import type { User, Property, Agent, Appointment, Notification, AdminAlert, User
 import { mockUsers, mockProperties, mockAgents, mockAppointments, mockNotifications, mockAdminAlerts } from '../data/mockData';
 import { v4 as uuidv4 } from 'uuid';
 
+// Constants for booking window
+export const BOOKING_WINDOW_DAYS = 7;
+
 interface AppContextType {
   // Current user
   currentUser: User | Agent | null;
@@ -15,6 +18,10 @@ interface AppContextType {
   properties: Property[];
   getProperty: (id: string) => Property | undefined;
   updatePropertyStatus: (id: string, status: Property['status'], firstViewerId?: string) => void;
+  addProperty: (property: Omit<Property, 'id'>) => Property;
+  updateProperty: (id: string, updates: Partial<Property>) => void;
+  markPropertySold: (id: string, salePrice: number, agentId: string) => void;
+  getSoldProperties: () => Property[];
 
   // Agents
   agents: Agent[];
@@ -46,6 +53,11 @@ interface AppContextType {
   selectDifferentAgent: (appointmentId: string, newAgentId: string) => void;
   hasAgentConflict: (agentId: string, date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => boolean;
   getAgentsFreeForSlot: (date: string, startTime: string, endTime: string, excludeAppointmentId?: string) => Agent[];
+  
+  // Priority queue functions
+  getPurchasePriorityQueue: (propertyId: string) => Appointment[];
+  getCustomerPriorityPosition: (propertyId: string, customerId: string) => number;
+  isDateWithinBookingWindow: (dateString: string) => boolean;
 
   // Messages
   messages: AppointmentMessage[];
@@ -112,6 +124,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : p
     ));
   }, []);
+
+  // Add a new property (agents and admins)
+  const addProperty = useCallback((propertyData: Omit<Property, 'id'>): Property => {
+    const newProperty: Property = {
+      ...propertyData,
+      id: uuidv4(),
+    };
+    setProperties(prev => [...prev, newProperty]);
+    return newProperty;
+  }, []);
+
+  // Update a property (only assigned agent or admin can edit)
+  const updateProperty = useCallback((id: string, updates: Partial<Property>) => {
+    setProperties(prev => prev.map(p => 
+      p.id === id ? { ...p, ...updates } : p
+    ));
+  }, []);
+
+  // Mark a property as sold
+  const markPropertySold = useCallback((id: string, salePrice: number, agentId: string) => {
+    setProperties(prev => prev.map(p => 
+      p.id === id 
+        ? { 
+            ...p, 
+            status: 'sold' as const,
+            salePrice,
+            soldDate: new Date().toISOString(),
+            soldByAgentId: agentId
+          } 
+        : p
+    ));
+    
+    // Update agent's sales count
+    setAgents(prev => prev.map(a => 
+      a.id === agentId 
+        ? { 
+            ...a, 
+            salesCount: a.salesCount + 1,
+            soldProperties: [...a.soldProperties, id]
+          } 
+        : a
+    ));
+
+    // Cancel all pending appointments for this property
+    setAppointments(prev => prev.map(appt => 
+      appt.propertyId === id && !['completed', 'cancelled'].includes(appt.status)
+        ? { ...appt, status: 'cancelled' as const }
+        : appt
+    ));
+  }, []);
+
+  // Get all sold properties
+  const getSoldProperties = useCallback(() => {
+    return properties.filter(p => p.status === 'sold');
+  }, [properties]);
 
   // Agent functions
   const getAgent = useCallback((id: string) => {
@@ -338,20 +405,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const appointment = appointments.find(a => a.id === id);
     if (!appointment) return;
     
+    const property = properties.find(p => p.id === appointment.propertyId);
+    
+    // Check if this customer had purchase priority
+    const hadPurchaseRights = appointment.hasPurchaseRights;
+    
+    // Update the appointment status to cancelled
     setAppointments(prev => prev.map(a => 
       a.id === id ? { ...a, status: 'cancelled' } : a
     ));
 
     // Notify agent about cancellation
-    const property = properties.find(p => p.id === appointment.propertyId);
     addNotification({
       userId: appointment.agentId,
-      type: 'booking_cancel',
+      type: 'appointment_cancelled',
       title: 'Booking Cancelled',
-      message: `The viewing for ${property?.title || 'a property'} has been cancelled.`,
+      message: `The viewing for ${property?.title || 'a property'} has been cancelled by the customer.`,
       read: false,
       relatedId: id,
     });
+
+    // If this customer had purchase rights, promote the next in queue
+    if (hadPurchaseRights && property) {
+      // Get all active appointments for this property, ordered by booking time
+      const activeAppointments = appointments.filter(a => 
+        a.propertyId === appointment.propertyId && 
+        a.id !== id &&
+        !['cancelled', 'rejected'].includes(a.status)
+      ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      if (activeAppointments.length > 0) {
+        // Promote the next customer in queue
+        const nextInQueue = activeAppointments[0];
+        
+        // Update the next appointment to have purchase rights
+        setAppointments(prev => prev.map(a => 
+          a.id === nextInQueue.id ? { ...a, hasPurchaseRights: true } : a
+        ));
+
+        // Update property first viewer
+        setProperties(prev => prev.map(p => 
+          p.id === property.id 
+            ? { 
+                ...p, 
+                firstViewerCustomerId: nextInQueue.customerId,
+                firstViewerTimestamp: nextInQueue.createdAt
+              } 
+            : p
+        ));
+
+        // Notify the promoted customer
+        addNotification({
+          userId: nextInQueue.customerId,
+          type: 'priority_promoted',
+          title: 'Purchase Priority Granted',
+          message: `You now hold the first right to purchase ${property?.title || 'this property'}. The previous priority holder has cancelled.`,
+          read: false,
+          relatedId: nextInQueue.id,
+        });
+      } else {
+        // No other appointments - reset property to available
+        setProperties(prev => prev.map(p => 
+          p.id === property.id 
+            ? { 
+                ...p, 
+                status: 'available' as const,
+                firstViewerCustomerId: undefined,
+                firstViewerTimestamp: undefined
+              } 
+            : p
+        ));
+      }
+    }
   }, [appointments, properties, addNotification]);
 
   // Double-booking prevention: check if agent has conflict for given time slot
@@ -403,6 +528,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return hasSlotAvailable && !hasConflict;
     });
   }, [agents, hasAgentConflict]);
+
+  // Get purchase priority queue for a property (ordered by booking timestamp - earliest first)
+  const getPurchasePriorityQueue = useCallback((propertyId: string): Appointment[] => {
+    return appointments
+      .filter(a => 
+        a.propertyId === propertyId && 
+        !['cancelled', 'rejected'].includes(a.status)
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [appointments]);
+
+  // Get customer's position in the purchase priority queue (1-indexed, 0 means not in queue)
+  const getCustomerPriorityPosition = useCallback((propertyId: string, customerId: string): number => {
+    const queue = appointments
+      .filter(a => 
+        a.propertyId === propertyId && 
+        !['cancelled', 'rejected'].includes(a.status)
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    const position = queue.findIndex(a => a.customerId === customerId);
+    return position === -1 ? 0 : position + 1;
+  }, [appointments]);
+
+  // Check if a date is within the 7-day booking window
+  const isDateWithinBookingWindow = useCallback((dateString: string): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const date = new Date(dateString);
+    date.setHours(0, 0, 0, 0);
+    
+    const maxDate = new Date(today);
+    maxDate.setDate(maxDate.getDate() + BOOKING_WINDOW_DAYS);
+    
+    return date >= today && date <= maxDate;
+  }, []);
 
   // Accept appointment
   const acceptAppointment = useCallback((id: string) => {
@@ -679,6 +841,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     properties,
     getProperty,
     updatePropertyStatus,
+    addProperty,
+    updateProperty,
+    markPropertySold,
+    getSoldProperties,
     agents,
     getAgent,
     getAvailableAgents,
@@ -704,6 +870,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectDifferentAgent,
     hasAgentConflict,
     getAgentsFreeForSlot,
+    getPurchasePriorityQueue,
+    getCustomerPriorityPosition,
+    isDateWithinBookingWindow,
     messages,
     getMessagesByAppointment,
     sendMessage,
