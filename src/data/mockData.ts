@@ -178,9 +178,7 @@ export const mockProperties: Property[] = [
     bathrooms: 3,
     sqft: 280,
     imageUrl: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
-    status: 'pending',
-    firstViewerCustomerId: 'customer-1',
-    firstViewerTimestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    status: 'available',
     features: ['Large Backyard', 'Garage', 'Near Highway', 'Quiet Neighborhood'],
   },
   {
@@ -206,151 +204,17 @@ export const mockUsers: User[] = [
   { id: 'admin-1', name: 'Admin User', email: 'admin@tesproperties.ph', role: 'admin', phone: '+63 999 888 7777', smsVerified: true },
 ];
 
-// Sample appointments (seeded for demo - diverse statuses to showcase features)
-export const mockAppointments: Appointment[] = [
-  {
-    id: 'apt-1',
-    propertyId: 'prop-5',
-    customerId: 'customer-1',
-    agentId: 'agent-1',
-    date: formatDate(addDays(today, 2)),
-    startTime: '10:00',
-    endTime: '11:00',
-    status: 'accepted',
-    hasViewingRights: true,
-    hasPurchaseRights: true, // First viewer
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    customerName: 'Juan Dela Cruz',
-    customerEmail: 'juan@email.com',
-    customerPhone: '+63 901 234 5678',
-    notes: 'Customer interested in long-term investment.',
-  },
-  {
-    id: 'apt-2',
-    propertyId: 'prop-1',
-    customerId: 'customer-1',
-    agentId: 'agent-2',
-    date: formatDate(addDays(today, 3)),
-    startTime: '14:00',
-    endTime: '15:00',
-    status: 'pending',
-    hasViewingRights: true,
-    hasPurchaseRights: true,
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    customerName: 'Juan Dela Cruz',
-    customerEmail: 'juan@email.com',
-    customerPhone: '+63 901 234 5678',
-  },
-  {
-    id: 'apt-3',
-    propertyId: 'prop-2',
-    customerId: 'customer-1',
-    agentId: 'agent-4',
-    previousAgentId: 'agent-3',
-    date: formatDate(addDays(today, 4)),
-    startTime: '09:00',
-    endTime: '10:00',
-    status: 'pending_approval',
-    hasViewingRights: true,
-    hasPurchaseRights: true,
-    createdAt: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(),
-    customerName: 'Juan Dela Cruz',
-    customerEmail: 'juan@email.com',
-    customerPhone: '+63 901 234 5678',
-    rejectionReason: 'Schedule conflict',
-  },
-  {
-    id: 'apt-4',
-    propertyId: 'prop-3',
-    customerId: 'customer-1',
-    agentId: 'agent-1',
-    date: formatDate(addDays(today, 5)),
-    startTime: '15:00',
-    endTime: '16:00',
-    status: 'rejected',
-    hasViewingRights: true,
-    hasPurchaseRights: true,
-    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    customerName: 'Juan Dela Cruz',
-    customerEmail: 'juan@email.com',
-    customerPhone: '+63 901 234 5678',
-    previousAgentId: 'agent-1',
-    rejectionReason: 'Unavailable on this date',
-  },
-  {
-    id: 'apt-5',
-    propertyId: 'prop-5',
-    customerId: 'customer-2',
-    agentId: 'agent-2',
-    date: formatDate(addDays(today, 3)),
-    startTime: '14:00',
-    endTime: '15:00',
-    status: 'pending',
-    hasViewingRights: true,
-    hasPurchaseRights: false, // Second viewer - viewing only
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    customerName: 'Maria Garcia',
-    customerEmail: 'maria.g@email.com',
-    customerPhone: '+63 902 345 6789',
-  },
-];
+// Empty appointments - clean handoff state
+// New appointments will be created through the booking flow
+export const mockAppointments: Appointment[] = [];
 
-// Sample notifications
-export const mockNotifications: Notification[] = [
-  {
-    id: 'notif-1',
-    userId: 'agent-1',
-    type: 'booking_new',
-    title: 'New Booking',
-    message: 'You have a new property viewing scheduled for Family Home in Buhangin',
-    read: false,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    relatedId: 'apt-1',
-  },
-  {
-    id: 'notif-2',
-    userId: 'customer-2',
-    type: 'viewing_only',
-    title: 'Viewing Rights Notice',
-    message: 'Another customer has priority purchase rights for Family Home in Buhangin. You may view the property, but cannot purchase unless they decline.',
-    read: false,
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    relatedId: 'prop-5',
-  },
-  {
-    id: 'notif-3',
-    userId: 'agent-2',
-    type: 'booking_new',
-    title: 'New Booking',
-    message: 'You have a new property viewing scheduled for Family Home in Buhangin',
-    read: true,
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    relatedId: 'apt-2',
-  },
-];
+// Empty notifications - clean handoff state
+// New notifications will be created through user actions
+export const mockNotifications: Notification[] = [];
 
-// Sample admin alerts
-export const mockAdminAlerts: AdminAlert[] = [
-  {
-    id: 'alert-1',
-    type: 'timeout',
-    status: 'pending',
-    description: 'Customer has not confirmed appointment within 24 hours',
-    appointmentId: 'apt-old-1',
-    customerId: 'customer-old',
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'alert-2',
-    type: 'complaint',
-    status: 'pending',
-    description: 'Customer reported agent was late to scheduled viewing',
-    appointmentId: 'apt-old-2',
-    customerId: 'customer-1',
-    agentId: 'agent-4',
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
+// Empty admin alerts - clean handoff state
+// New alerts will be created through the system
+export const mockAdminAlerts: AdminAlert[] = [];
 
 // Company info
 export const companyInfo = {

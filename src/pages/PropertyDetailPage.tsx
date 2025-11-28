@@ -165,8 +165,10 @@ export default function PropertyDetailPage() {
               </div>
             </div>
 
-            {/* Race Logic Notice */}
-            {hasExistingViewer && property.status === 'pending' && (
+            {/* Race Logic Notice - Only shown to non-owners */}
+            {hasExistingViewer && property.status === 'pending' && 
+             currentUser && currentUser.role === 'customer' && 
+             property.firstViewerCustomerId !== currentUser.id && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
                 <div className="flex items-start">
                   <svg className="w-6 h-6 text-yellow-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
