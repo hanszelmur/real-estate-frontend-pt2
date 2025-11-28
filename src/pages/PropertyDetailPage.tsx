@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, getInitials, generateStars } from '../utils/helpers';
 import BookingModal from '../components/booking/BookingModal';
+import EditPropertyModal from '../components/common/EditPropertyModal';
 
 export default function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getProperty, currentUser, getAppointmentsByProperty } = useApp();
+  const { getProperty, currentUser, getAppointmentsByProperty, getAgent } = useApp();
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const property = getProperty(id || '');
 
@@ -25,6 +27,15 @@ export default function PropertyDetailPage() {
       </div>
     );
   }
+
+  // Get assigned agent for this property
+  const assignedAgent = property.assignedAgentId ? getAgent(property.assignedAgentId) : undefined;
+  
+  // Check if user can edit this property
+  const canEdit = currentUser && (
+    currentUser.role === 'admin' || 
+    (currentUser.role === 'agent' && property.assignedAgentId === currentUser.id)
+  );
 
   const existingAppointments = getAppointmentsByProperty(property.id);
   const hasExistingViewer = existingAppointments.some(a => a.status !== 'cancelled');
@@ -84,6 +95,19 @@ export default function PropertyDetailPage() {
             <span className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusBadge[property.status]}`}>
               {property.status}
             </span>
+            {/* Edit Button for agents/admins */}
+            {canEdit && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="absolute top-4 left-4 px-3 py-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 text-blue-600 rounded-md text-sm font-medium flex items-center shadow-sm hover:shadow transition-all"
+                title="Edit Property"
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Property
+              </button>
+            )}
           </div>
 
           {/* Info */}
@@ -211,6 +235,46 @@ export default function PropertyDetailPage() {
               </div>
             </div>
 
+            {/* Assigned Agent with Ratings */}
+            {assignedAgent && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Listing Agent</h2>
+                <div className="flex items-center space-x-4 mb-4">
+                  <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                    {getInitials(assignedAgent.name)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-lg text-gray-900">{assignedAgent.name}</p>
+                    <div className="flex items-center">
+                      <span className="text-yellow-500">{generateStars(assignedAgent.rating)}</span>
+                      <span className="ml-2 text-gray-600">{assignedAgent.rating.toFixed(1)}</span>
+                    </div>
+                    <p className="text-sm text-gray-500">{assignedAgent.salesCount} properties sold</p>
+                  </div>
+                </div>
+                
+                {/* Latest Reviews */}
+                {assignedAgent.latestRatings.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Recent Reviews</h3>
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {assignedAgent.latestRatings.slice(0, 3).map(rating => (
+                        <div key={rating.id} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-gray-900">{rating.customerName}</span>
+                            <span className="text-yellow-500 text-sm">{generateStars(rating.rating)}</span>
+                          </div>
+                          {rating.comment && (
+                            <p className="text-sm text-gray-600">{rating.comment}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Booking info */}
             <div className="bg-blue-50 rounded-lg p-6">
               <h3 className="font-semibold text-blue-800 mb-2">How Booking Works</h3>
@@ -243,6 +307,14 @@ export default function PropertyDetailPage() {
           property={property}
           onClose={() => setShowBookingModal(false)}
           onSuccess={handleBookingSuccess}
+        />
+      )}
+
+      {/* Edit Property Modal */}
+      {showEditModal && (
+        <EditPropertyModal
+          property={property}
+          onClose={() => setShowEditModal(false)}
         />
       )}
     </div>

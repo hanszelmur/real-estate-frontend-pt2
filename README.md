@@ -180,6 +180,92 @@ Agents and admins can add new property listings directly from the frontend UI. T
 
 ---
 
+## ⭐ Agent Ratings Feature
+
+Customers can rate agents after completing a property viewing. This helps other customers make informed decisions and motivates agents to provide excellent service.
+
+### How Agent Ratings Work
+
+1. **After Viewing Completion**: When an agent marks a viewing as 'done' or 'completed', the customer sees a rating prompt
+2. **Rating Modal**: Customer can rate 1-5 stars with optional feedback text
+3. **Rating Display**: Ratings and reviews are displayed on:
+   - Agent Dashboard ("My Rating" section with latest reviews)
+   - Property Detail Page (Listing Agent section with reviews)
+4. **One Rating Per Appointment**: Customers can only rate once per completed viewing
+
+### Rating Flow
+```
+1. Agent marks viewing as DONE or COMPLETED
+2. Customer opens completed appointment in dashboard
+3. "Rate Your Experience" section appears with "Rate Agent" button
+4. Customer clicks to open AgentRatingModal
+5. Customer selects 1-5 stars and optionally adds feedback
+6. Rating submitted → Agent's average rating updated
+7. Rating appears in agent's "Latest Reviews" section
+```
+
+### Agent Rating Display Locations
+
+| Location | What's Shown |
+|----------|--------------|
+| Agent Dashboard | Rating (4.8★), Latest Reviews list |
+| Property Detail Page | Listing Agent profile with rating and recent reviews |
+| Customer Appointment Modal | Rating prompt for completed appointments |
+
+### Technical Implementation
+
+- Ratings are stored in `Agent.latestRatings` array (keeps last 10 ratings)
+- Agent's `rating` field is the calculated average of all ratings
+- `addAgentRating()` function in AppContext handles rating submission
+- `hasRated` field on Appointment tracks if customer already rated
+
+---
+
+## ✏️ Property Edit UI Feature
+
+Agents and admins can edit existing property listings from within the UI. This allows for easy updates to property details without needing backend access.
+
+### How Property Edit Works
+
+1. **Edit Button**: Visible on PropertyCard and PropertyDetailPage for authorized users
+2. **Pre-filled Form**: Edit modal opens with all current property data
+3. **Save Changes**: Updates are saved and instantly reflected in the UI
+4. **Access Control**: Only the assigned agent or admin can edit
+
+### Who Can Edit Properties
+
+| User Role | Can Edit |
+|-----------|----------|
+| Customer | ❌ No |
+| Agent (not assigned) | ❌ No |
+| Agent (assigned to property) | ✅ Yes |
+| Admin | ✅ Yes (all properties) |
+
+### Edit Property Form Fields
+
+| Field | Description |
+|-------|-------------|
+| Property Title | Name/title of the listing |
+| Address | Street address |
+| City | City name |
+| Price (₱) | Listing price |
+| Description | Property details |
+| Bedrooms | Number of bedrooms |
+| Bathrooms | Number of bathrooms |
+| Area (sqm) | Property size |
+| Image URL | Property image URL |
+| Features | Comma-separated feature list |
+| Exclusive | Checkbox for exclusive listing flag |
+
+### Technical Implementation
+
+- Edit button appears on PropertyCard via `canEdit` check
+- `EditPropertyModal` component handles form with validation
+- `updateProperty()` function in AppContext saves changes
+- Changes are immediately reflected across all views
+
+---
+
 ## 🔧 Core System Rules & Logic
 
 ### Enhanced Booking & Sales Completion Flow
@@ -698,7 +784,17 @@ This demo application uses React Context for state management. For production de
 
 ## 📝 Changelog / What's New
 
-### Add Property Feature Release (Current)
+### Agent Ratings & Property Edit UI Release (Current)
+- ✅ **Agent Ratings System** - Customers can rate agents (1-5 stars) after completing a viewing
+- ✅ **Rating Modal** - Beautiful star rating modal with optional feedback text
+- ✅ **Agent Reviews Display** - Agent profile section shows rating and latest reviews on dashboard and property pages
+- ✅ **Property Edit UI** - Agents and admins can edit existing property listings
+- ✅ **Edit Property Modal** - Pre-filled form modal for editing property details
+- ✅ **Edit Button on Property Cards** - Visible to property owner agent and admins
+- ✅ **Edit Button on Property Detail Page** - Quick edit access from property view
+- ✅ **Rating Tracking** - Appointments track whether customer has rated to prevent duplicate ratings
+
+### Add Property Feature Release
 - ✅ **Add Property Modal** - Agents and admins can now add new property listings via a form modal
 - ✅ **Add Property Button on Agent Dashboard** - Quick access to add properties from the agent dashboard header
 - ✅ **Add Property Button on Admin Dashboard** - Admins can add properties from their dashboard
@@ -759,11 +855,10 @@ This demo application uses React Context for state management. For production de
 2. **Real SMS Integration**: Replace demo verification with actual SMS provider (Twilio, etc.)
 3. **Backend API**: Connect to real backend instead of mock data
 4. **Profile Pictures**: Enable URL-based profile picture uploads
-5. **Agent Ratings**: Allow customers to rate agents after viewings
+5. ~~**Agent Ratings**: Allow customers to rate agents after viewings~~ ✅ **COMPLETED** - Agent rating system with 1-5 stars and reviews
 6. **Email Notifications**: Add email alongside in-app notifications
-7. ~~**Property Add/Edit UI**: Full property management interface for agents and admins~~ ✅ **COMPLETED** - Add Property feature implemented
+7. ~~**Property Add/Edit UI**: Full property management interface for agents and admins~~ ✅ **COMPLETED** - Add and Edit Property features implemented
 8. **Real-time WebSocket**: Add Socket.io for live updates across clients
-9. **Property Edit UI**: Add ability to edit existing property listings (future enhancement)
 
 ### Maintenance Notes
 - Mock data in `src/data/mockData.ts` - replace with API calls

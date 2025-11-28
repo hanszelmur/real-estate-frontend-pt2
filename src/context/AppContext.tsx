@@ -38,6 +38,8 @@ interface AppContextType {
   removeAgentUnavailablePeriod: (agentId: string, periodId: string) => void;
   getAgentUnavailablePeriods: (agentId: string, date?: string) => AgentUnavailablePeriod[];
   isStartTimeAvailable: (agentId: string, date: string, startTime: string) => boolean;
+  // Agent rating
+  addAgentRating: (agentId: string, customerId: string, customerName: string, rating: number, comment: string) => void;
 
   // Users
   users: User[];
@@ -357,6 +359,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     return !hasConflict;
   }, [agents, appointments]);
+
+  // Add agent rating (after completed viewing)
+  const addAgentRating = useCallback((
+    agentId: string,
+    customerId: string,
+    customerName: string,
+    rating: number,
+    comment: string
+  ) => {
+    const newRating = {
+      id: uuidv4(),
+      customerId,
+      customerName,
+      rating,
+      comment,
+      date: new Date().toISOString().split('T')[0],
+    };
+
+    setAgents(prev => prev.map(a => {
+      if (a.id !== agentId) return a;
+      
+      // Calculate new average rating
+      const allRatings = [...a.latestRatings, newRating];
+      const totalRating = allRatings.reduce((sum, r) => sum + r.rating, 0);
+      const newAvgRating = totalRating / allRatings.length;
+      
+      return {
+        ...a,
+        rating: Math.round(newAvgRating * 10) / 10, // Round to 1 decimal place
+        latestRatings: [newRating, ...a.latestRatings].slice(0, 10), // Keep latest 10 ratings
+      };
+    }));
+  }, []);
 
   // User functions
   const getUser = useCallback((id: string) => {
@@ -1282,6 +1317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeAgentUnavailablePeriod,
     getAgentUnavailablePeriods,
     isStartTimeAvailable,
+    addAgentRating,
     users,
     getUser,
     updateUserSmsVerification,
