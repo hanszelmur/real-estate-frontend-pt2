@@ -892,7 +892,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [agents, appointments]);
 
   // Check if a customer has already rated an appointment (duplicate prevention)
-  const hasCustomerRatedAppointment = useCallback((appointmentId: string, customerId: string): boolean => {
+  const hasCustomerRatedAppointment = useCallback((appointmentId: string, _customerId: string): boolean => {
     const appointment = appointments.find(a => a.id === appointmentId);
     if (!appointment) return false;
     
@@ -902,8 +902,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Also check if there's a rating ID stored (double-check)
     if (appointment.ratingId) return true;
     
-    // Check if the customer matches and has rated
-    return appointment.customerId === customerId && !!appointment.hasRated;
+    // No rating found for this appointment
+    return false;
   }, [appointments]);
 
   // Check if a date is within the 7-day booking window

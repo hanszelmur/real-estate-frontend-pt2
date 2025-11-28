@@ -126,10 +126,10 @@ export interface Appointment {
   hasRated?: boolean; // Whether the customer has rated this appointment
   // Rating duplicate prevention - appointment ID to ensure one rating per appointment
   ratingId?: string; // ID of the rating submitted for this appointment (prevents duplicates)
-  // Seconds-precision contention tracking
-  bookingAttemptTimestamp?: string; // Precise timestamp when booking was attempted (milliseconds)
+  // Contention tracking with millisecond precision
+  bookingAttemptTimestamp?: string; // ISO timestamp with millisecond precision when booking was attempted
   wasHighDemandSlot?: boolean; // Whether this slot had contention at booking time
-  promotedAt?: string; // Timestamp when customer was promoted from queue (for clear notifications)
+  promotedAt?: string; // ISO timestamp when customer was promoted from queue (for clear notifications)
   promotedFromPosition?: number; // Previous queue position before promotion
 }
 

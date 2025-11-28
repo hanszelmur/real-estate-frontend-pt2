@@ -119,10 +119,10 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
   const handleConfirm = () => {
     if (!selectedAgent || !selectedSlot || !currentUser) return;
 
-    // Record the exact timestamp of booking attempt (seconds precision)
+    // Record the exact timestamp of booking attempt (ISO timestamp with millisecond precision)
     const bookingAttemptTimestamp = new Date().toISOString();
 
-    // Seconds-precision availability check before creating appointment
+    // Check availability with contention detection before creating appointment
     const availabilityCheck = checkSecondsAvailability(selectedAgent.id, selectedSlot.date, selectedSlot.startTime);
     
     // Final check before creating appointment
