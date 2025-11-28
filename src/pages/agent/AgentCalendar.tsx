@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp, AGENT_BUFFER_HOURS } from '../../context/AppContext';
-import type { Agent, Appointment } from '../../types';
+import type { Agent, Appointment, AgentUnavailablePeriod } from '../../types';
 import { formatTime, formatTimeRange } from '../../utils/helpers';
 import { 
   startOfMonth, 
@@ -27,12 +27,19 @@ export default function AgentCalendar() {
     properties,
     users,
     updateAppointment,
+    addAgentUnavailablePeriod,
+    removeAgentUnavailablePeriod,
+    getAgentUnavailablePeriods,
   } = useApp();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockStartTime, setBlockStartTime] = useState('09:00');
+  const [blockEndTime, setBlockEndTime] = useState('10:00');
+  const [blockReason, setBlockReason] = useState('');
 
   // Get agent's appointments - useMemo must be before conditional return
   const agentId = currentUser?.id;
@@ -66,10 +73,16 @@ export default function AgentCalendar() {
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   };
 
-  // Get blocked slots for a date
+  // Get blocked slots for a date (from availability)
   const getBlockedSlotsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return agent.availability.filter(s => s.date === dateStr && s.isBooked && !s.bookingId);
+  };
+
+  // Get unavailable periods for a date (custom blocked periods)
+  const getUnavailablePeriodsForDate = (date: Date): AgentUnavailablePeriod[] => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return getAgentUnavailablePeriods(agent.id, dateStr);
   };
 
   // Get buffer slots (configurable hours after completed appointments)
@@ -100,9 +113,40 @@ export default function AgentCalendar() {
     return bufferTimes;
   };
 
+  // Check if a time slot falls within an unavailable period
+  const isTimeInUnavailablePeriod = (time: string, unavailablePeriods: AgentUnavailablePeriod[]): AgentUnavailablePeriod | null => {
+    return unavailablePeriods.find(period => 
+      time >= period.startTime && time < period.endTime
+    ) || null;
+  };
+
   // Mark appointment as done
   const handleMarkAsDone = (appointmentId: string) => {
     updateAppointment(appointmentId, { status: 'completed' });
+  };
+
+  // Add unavailable period
+  const handleAddUnavailablePeriod = () => {
+    if (!selectedDate || blockStartTime >= blockEndTime) return;
+    
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    addAgentUnavailablePeriod(agent.id, {
+      date: dateStr,
+      startTime: blockStartTime,
+      endTime: blockEndTime,
+      reason: blockReason || undefined,
+    });
+    
+    // Reset form
+    setShowBlockModal(false);
+    setBlockStartTime('09:00');
+    setBlockEndTime('10:00');
+    setBlockReason('');
+  };
+
+  // Remove unavailable period
+  const handleRemoveUnavailablePeriod = (periodId: string) => {
+    removeAgentUnavailablePeriod(agent.id, periodId);
   };
 
   // Navigation
@@ -142,6 +186,7 @@ export default function AgentCalendar() {
     const dayAppointments = getAppointmentsForDate(dateToShow);
     const blockedSlots = getBlockedSlotsForDate(dateToShow);
     const bufferTimes = getBufferSlotsForDate(dateToShow);
+    const unavailablePeriods = getUnavailablePeriodsForDate(dateToShow);
 
     // Generate time slots from 8 AM to 6 PM
     const timeSlots = [];
@@ -151,26 +196,65 @@ export default function AgentCalendar() {
 
     return (
       <div className="bg-white rounded-lg shadow-md">
-        <div className="p-4 border-b bg-gray-50">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {format(dateToShow, 'EEEE, MMMM d, yyyy')}
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {dayAppointments.length} appointment{dayAppointments.length !== 1 ? 's' : ''} scheduled
-          </p>
+        <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {format(dateToShow, 'EEEE, MMMM d, yyyy')}
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {dayAppointments.length} appointment{dayAppointments.length !== 1 ? 's' : ''} scheduled
+            </p>
+          </div>
+          <button
+            onClick={() => setShowBlockModal(true)}
+            className="px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 flex items-center"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Mark Unavailable
+          </button>
         </div>
+
+        {/* Unavailable Periods Summary */}
+        {unavailablePeriods.length > 0 && (
+          <div className="p-4 bg-red-50 border-b border-red-200">
+            <h3 className="text-sm font-medium text-red-800 mb-2">Blocked Periods</h3>
+            <div className="space-y-2">
+              {unavailablePeriods.map(period => (
+                <div key={period.id} className="flex items-center justify-between bg-white p-2 rounded border border-red-200">
+                  <div>
+                    <span className="font-medium text-red-700">
+                      {formatTime(period.startTime)} - {formatTime(period.endTime)}
+                    </span>
+                    {period.reason && (
+                      <span className="text-sm text-gray-600 ml-2">({period.reason})</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveUnavailablePeriod(period.id)}
+                    className="text-red-600 hover:text-red-800 text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="divide-y">
           {timeSlots.map(time => {
             const appointment = dayAppointments.find(a => a.startTime === time);
             const isBlocked = blockedSlots.some(s => s.startTime === time);
             const isBuffer = bufferTimes.includes(time);
+            const unavailablePeriod = isTimeInUnavailablePeriod(time, unavailablePeriods);
             
             return (
               <div 
                 key={time} 
                 className={`flex items-stretch min-h-[80px] ${
-                  isBuffer ? 'bg-orange-50' : ''
+                  isBuffer ? 'bg-orange-50' : unavailablePeriod ? 'bg-red-50' : ''
                 }`}
               >
                 {/* Time column */}
@@ -191,7 +275,7 @@ export default function AgentCalendar() {
                             {getProperty(appointment.propertyId)?.title || 'Property'}
                           </p>
                           <p className="text-sm text-gray-600">
-                            {formatTimeRange(appointment.startTime, appointment.endTime)}
+                            {formatTime(appointment.startTime)}
                           </p>
                           <p className="text-sm text-gray-500 mt-1">
                             Customer: {appointment.customerName || getCustomer(appointment.customerId)?.name}
@@ -214,6 +298,13 @@ export default function AgentCalendar() {
                           )}
                         </div>
                       </div>
+                    </div>
+                  ) : unavailablePeriod ? (
+                    <div className="p-3 rounded-lg bg-red-100 border border-red-300">
+                      <p className="text-sm text-red-700 font-medium">🚫 Unavailable</p>
+                      <p className="text-xs text-red-600">
+                        {unavailablePeriod.reason || 'Custom blocked period'}
+                      </p>
                     </div>
                   ) : isBlocked ? (
                     <div className="p-3 rounded-lg bg-gray-200 border border-gray-300">
@@ -239,6 +330,103 @@ export default function AgentCalendar() {
     );
   };
 
+  // Block time modal
+  const renderBlockModal = () => {
+    if (!showBlockModal || !selectedDate) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center">
+          <div
+            className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+            onClick={() => setShowBlockModal(false)}
+          ></div>
+
+          <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+            <div className="bg-white px-6 py-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Mark Time as Unavailable
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Block time on {format(selectedDate, 'MMMM d, yyyy')}
+              </p>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Time
+                    </label>
+                    <select
+                      value={blockStartTime}
+                      onChange={(e) => setBlockStartTime(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                    >
+                      {Array.from({ length: 10 }, (_, i) => {
+                        const hour = 8 + i;
+                        const time = `${String(hour).padStart(2, '0')}:00`;
+                        return <option key={time} value={time}>{formatTime(time)}</option>;
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      End Time
+                    </label>
+                    <select
+                      value={blockEndTime}
+                      onChange={(e) => setBlockEndTime(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                    >
+                      {Array.from({ length: 10 }, (_, i) => {
+                        const hour = 9 + i;
+                        const time = `${String(hour).padStart(2, '0')}:00`;
+                        return <option key={time} value={time}>{formatTime(time)}</option>;
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reason (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={blockReason}
+                    onChange={(e) => setBlockReason(e.target.value)}
+                    placeholder="e.g., Lunch break, Personal event"
+                    className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                  />
+                </div>
+
+                {blockStartTime >= blockEndTime && (
+                  <p className="text-sm text-red-600">End time must be after start time</p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowBlockModal(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddUnavailablePeriod}
+                  disabled={blockStartTime >= blockEndTime}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Block Time
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -255,7 +443,7 @@ export default function AgentCalendar() {
               Back to Dashboard
             </Link>
             <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
-            <p className="text-gray-600 mt-1">View and manage your appointments</p>
+            <p className="text-gray-600 mt-1">View and manage your appointments and availability</p>
           </div>
 
           {/* View Mode Toggle */}
@@ -338,8 +526,8 @@ export default function AgentCalendar() {
               <span className="text-gray-600">Completed</span>
             </div>
             <div className="flex items-center">
-              <span className="w-3 h-3 rounded-full bg-gray-300 mr-2"></span>
-              <span className="text-gray-600">Blocked</span>
+              <span className="w-3 h-3 rounded-full bg-red-400 mr-2"></span>
+              <span className="text-gray-600">Unavailable</span>
             </div>
             <div className="flex items-center">
               <span className="w-3 h-3 rounded-full bg-orange-300 mr-2"></span>
@@ -365,6 +553,7 @@ export default function AgentCalendar() {
               {calendarDays.map((day, index) => {
                 const dayAppointments = getAppointmentsForDate(day);
                 const blockedSlots = getBlockedSlotsForDate(day);
+                const unavailablePeriods = getUnavailablePeriodsForDate(day);
                 const isCurrentMonth = isSameMonth(day, currentDate);
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isTodayDate = isToday(day);
@@ -390,7 +579,7 @@ export default function AgentCalendar() {
 
                     {/* Appointments preview */}
                     <div className="space-y-1">
-                      {dayAppointments.slice(0, 3).map(appt => (
+                      {dayAppointments.slice(0, 2).map(appt => (
                         <div
                           key={appt.id}
                           className={`text-xs p-1 rounded truncate ${getStatusBgColor(appt.status)}`}
@@ -400,12 +589,17 @@ export default function AgentCalendar() {
                           {formatTime(appt.startTime)}
                         </div>
                       ))}
-                      {dayAppointments.length > 3 && (
+                      {dayAppointments.length > 2 && (
                         <div className="text-xs text-gray-500 pl-1">
-                          +{dayAppointments.length - 3} more
+                          +{dayAppointments.length - 2} more
                         </div>
                       )}
-                      {blockedSlots.length > 0 && dayAppointments.length === 0 && (
+                      {unavailablePeriods.length > 0 && (
+                        <div className="text-xs p-1 rounded bg-red-100 text-red-700">
+                          {unavailablePeriods.length} blocked
+                        </div>
+                      )}
+                      {blockedSlots.length > 0 && dayAppointments.length === 0 && unavailablePeriods.length === 0 && (
                         <div className="text-xs p-1 rounded bg-gray-200 text-gray-600">
                           {blockedSlots.length} blocked
                         </div>
@@ -432,6 +626,9 @@ export default function AgentCalendar() {
             mode="agent"
           />
         )}
+
+        {/* Block Time Modal */}
+        {renderBlockModal()}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { User, Property, Agent, Appointment, Notification, AdminAlert, UserRole, AppointmentMessage } from '../types';
+import type { User, Property, Agent, Appointment, Notification, AdminAlert, UserRole, AppointmentMessage, AgentUnavailablePeriod } from '../types';
 import { mockUsers, mockProperties, mockAgents, mockAppointments, mockNotifications, mockAdminAlerts } from '../data/mockData';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -23,6 +23,7 @@ interface AppContextType {
   updateProperty: (id: string, updates: Partial<Property>) => void;
   markPropertySold: (id: string, salePrice: number, agentId: string) => void;
   getSoldProperties: () => Property[];
+  togglePropertyExclusive: (propertyId: string) => void;
 
   // Agents
   agents: Agent[];
@@ -32,6 +33,11 @@ interface AppContextType {
   toggleAgentVacation: (agentId: string) => void;
   updateAgentAvailability: (agentId: string, slotId: string, isBooked: boolean, bookingId?: string) => void;
   updateAgentSmsVerification: (agentId: string, verified: boolean) => void;
+  // Agent unavailability management
+  addAgentUnavailablePeriod: (agentId: string, period: Omit<AgentUnavailablePeriod, 'id'>) => void;
+  removeAgentUnavailablePeriod: (agentId: string, periodId: string) => void;
+  getAgentUnavailablePeriods: (agentId: string, date?: string) => AgentUnavailablePeriod[];
+  isStartTimeAvailable: (agentId: string, date: string, startTime: string) => boolean;
 
   // Users
   users: User[];
@@ -63,6 +69,10 @@ interface AppContextType {
   getPurchasePriorityQueue: (propertyId: string) => Appointment[];
   getCustomerPriorityPosition: (propertyId: string, customerId: string) => number;
   isDateWithinBookingWindow: (dateString: string) => boolean;
+  
+  // Exclusive slot waitlist functions
+  getSlotWaitlist: (propertyId: string, agentId: string, date: string, startTime: string) => Appointment[];
+  getCustomerWaitlistPosition: (appointmentId: string) => number;
 
   // Reminder functions
   getUpcomingAppointments: (userId: string, role: UserRole, hoursAhead?: number) => Appointment[];
@@ -189,6 +199,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return properties.filter(p => p.status === 'sold');
   }, [properties]);
 
+  // Toggle property exclusive mode
+  const togglePropertyExclusive = useCallback((propertyId: string) => {
+    setProperties(prev => prev.map(p => 
+      p.id === propertyId ? { ...p, isExclusive: !p.isExclusive } : p
+    ));
+  }, []);
+
   // Agent functions
   const getAgent = useCallback((id: string) => {
     return agents.find(a => a.id === id);
@@ -266,6 +283,80 @@ export function AppProvider({ children }: { children: ReactNode }) {
       a.id === agentId ? { ...a, smsVerified: verified } : a
     ));
   }, []);
+
+  // Agent unavailability management functions
+  const addAgentUnavailablePeriod = useCallback((agentId: string, period: Omit<AgentUnavailablePeriod, 'id'>) => {
+    const newPeriod: AgentUnavailablePeriod = {
+      ...period,
+      id: uuidv4(),
+    };
+    setAgents(prev => prev.map(a => 
+      a.id === agentId 
+        ? { ...a, unavailablePeriods: [...(a.unavailablePeriods || []), newPeriod] }
+        : a
+    ));
+    // Update currentUser if it's the same agent
+    setCurrentUser(prev => 
+      prev && prev.id === agentId && prev.role === 'agent' 
+        ? { ...prev, unavailablePeriods: [...((prev as Agent).unavailablePeriods || []), newPeriod] } as Agent
+        : prev
+    );
+  }, []);
+
+  const removeAgentUnavailablePeriod = useCallback((agentId: string, periodId: string) => {
+    setAgents(prev => prev.map(a => 
+      a.id === agentId 
+        ? { ...a, unavailablePeriods: (a.unavailablePeriods || []).filter(p => p.id !== periodId) }
+        : a
+    ));
+    // Update currentUser if it's the same agent
+    setCurrentUser(prev => 
+      prev && prev.id === agentId && prev.role === 'agent' 
+        ? { ...prev, unavailablePeriods: ((prev as Agent).unavailablePeriods || []).filter(p => p.id !== periodId) } as Agent
+        : prev
+    );
+  }, []);
+
+  const getAgentUnavailablePeriods = useCallback((agentId: string, date?: string): AgentUnavailablePeriod[] => {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent || !agent.unavailablePeriods) return [];
+    if (date) {
+      return agent.unavailablePeriods.filter(p => p.date === date);
+    }
+    return agent.unavailablePeriods;
+  }, [agents]);
+
+  // Check if a specific start time is available for an agent (considering unavailable periods)
+  const isStartTimeAvailable = useCallback((agentId: string, date: string, startTime: string): boolean => {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return false;
+    if (agent.isOnVacation) return false;
+    
+    // Check unavailable periods
+    const unavailablePeriods = agent.unavailablePeriods || [];
+    const isInUnavailablePeriod = unavailablePeriods.some(period => {
+      if (period.date !== date) return false;
+      // Start time falls within unavailable period
+      return startTime >= period.startTime && startTime < period.endTime;
+    });
+    if (isInUnavailablePeriod) return false;
+    
+    // Check if slot is booked in availability
+    const slot = agent.availability.find(s => 
+      s.date === date && s.startTime === startTime
+    );
+    if (slot && slot.isBooked) return false;
+    
+    // Check for existing appointments at this time
+    const hasConflict = appointments.some(a => {
+      if (a.agentId !== agentId) return false;
+      if (a.date !== date) return false;
+      if (['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)) return false;
+      return a.startTime === startTime;
+    });
+    
+    return !hasConflict;
+  }, [agents, appointments]);
 
   // User functions
   const getUser = useCallback((id: string) => {
@@ -572,6 +663,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     
     const position = queue.findIndex(a => a.customerId === customerId);
+    return position === -1 ? 0 : position + 1;
+  }, [appointments]);
+
+  // Get waitlist for a specific exclusive slot (property + agent + date + start time)
+  const getSlotWaitlist = useCallback((
+    propertyId: string,
+    agentId: string,
+    date: string,
+    startTime: string
+  ): Appointment[] => {
+    return appointments
+      .filter(a => 
+        a.propertyId === propertyId && 
+        a.agentId === agentId &&
+        a.date === date &&
+        a.startTime === startTime &&
+        !['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [appointments]);
+
+  // Get customer's position in the waitlist for a specific appointment/slot
+  const getCustomerWaitlistPosition = useCallback((appointmentId: string): number => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return 0;
+    
+    const waitlist = appointments
+      .filter(a => 
+        a.propertyId === appointment.propertyId && 
+        a.agentId === appointment.agentId &&
+        a.date === appointment.date &&
+        a.startTime === appointment.startTime &&
+        !['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)
+      )
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    const position = waitlist.findIndex(a => a.id === appointmentId);
     return position === -1 ? 0 : position + 1;
   }, [appointments]);
 
@@ -1142,6 +1270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateProperty,
     markPropertySold,
     getSoldProperties,
+    togglePropertyExclusive,
     agents,
     getAgent,
     getAvailableAgents,
@@ -1149,6 +1278,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleAgentVacation,
     updateAgentAvailability,
     updateAgentSmsVerification,
+    addAgentUnavailablePeriod,
+    removeAgentUnavailablePeriod,
+    getAgentUnavailablePeriods,
+    isStartTimeAvailable,
     users,
     getUser,
     updateUserSmsVerification,
@@ -1174,6 +1307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getPurchasePriorityQueue,
     getCustomerPriorityPosition,
     isDateWithinBookingWindow,
+    getSlotWaitlist,
+    getCustomerWaitlistPosition,
     getUpcomingAppointments,
     sendAppointmentReminders,
     messages,
