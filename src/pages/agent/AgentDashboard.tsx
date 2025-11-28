@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import type { Agent, Appointment } from '../../types';
-import { formatDate, formatTimeRange, generateStars, formatCurrency } from '../../utils/helpers';
 import { formatDate, formatTimeRange, formatRelativeTime, generateStars, formatCurrency } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
@@ -41,7 +40,6 @@ export default function AgentDashboard() {
     a.agentId === agent.id && 
     (a.status === 'scheduled' || a.status === 'pending' || a.status === 'accepted')
   ).sort((a, b) => {
-    // Sort by date and time
     if (a.date !== b.date) return a.date.localeCompare(b.date);
     return a.startTime.localeCompare(b.startTime);
   });
@@ -64,9 +62,6 @@ export default function AgentDashboard() {
   const getCustomer = (id: string) => users.find(u => u.id === id);
 
   const handleSmsVerify = () => {
-    // DEMO: In a production app, this would trigger an SMS verification flow
-    // with OTP code sent to the agent's phone number and validation.
-    // For this demo, verification is set to true immediately.
     updateAgentSmsVerification(agent.id, true);
   };
 
@@ -197,119 +192,191 @@ export default function AgentDashboard() {
                         </h2>
                         <span className="px-3 py-1 bg-yellow-400 text-yellow-900 text-sm rounded-full font-medium">
                           Pending Approval
-                    </span>
-                  </div>
-                  <p className="text-sm text-yellow-700 mt-1">Accept or reject these booking requests</p>
-                </div>
-                <div className="p-6">
-                  <div className="space-y-4">
-                    {pendingAppointments.map(appointment => {
-                      const property = getProperty(appointment.propertyId);
-                      
-                      return (
-                        <div 
-                          key={appointment.id} 
-                          className="border-2 border-yellow-200 rounded-lg p-4 hover:border-yellow-400 cursor-pointer transition-colors"
-                          onClick={() => setSelectedAppointment(appointment)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h4 className="font-semibold text-lg">{property?.title}</h4>
-                              <p className="text-gray-600 text-sm">{property?.address}</p>
+                        </span>
+                      </div>
+                      <p className="text-sm text-yellow-700 mt-1">Accept or reject these booking requests</p>
+                    </div>
+                    <div className="p-6">
+                      <div className="space-y-4">
+                        {pendingAppointments.map(appointment => {
+                          const property = getProperty(appointment.propertyId);
+                          return (
+                            <div 
+                              key={appointment.id} 
+                              className="border-2 border-yellow-200 rounded-lg p-4 hover:border-yellow-400 cursor-pointer transition-colors"
+                              onClick={() => setSelectedAppointment(appointment)}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h4 className="font-semibold text-lg">{property?.title}</h4>
+                                  <p className="text-gray-600 text-sm">{property?.address}</p>
+                                </div>
+                                <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
+                                  {appointment.status}
+                                </span>
+                              </div>
+                              <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-gray-500">Date</p>
+                                  <p className="font-medium">{formatDate(appointment.date)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Time</p>
+                                  <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
+                                </div>
+                              </div>
+                              <p className="mt-3 text-sm text-yellow-700">Click to view details and respond</p>
                             </div>
-                            <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
-                              {appointment.status}
-                            </span>
-                          </div>
-                          <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-500">Date</p>
-                              <p className="font-medium">{formatDate(appointment.date)}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500">Time</p>
-                              <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
-                            </div>
-                          </div>
-                          <p className="mt-3 text-sm text-yellow-700">Click to view details and respond</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Confirmed Appointments */}
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Upcoming Appointments</h2>
-              </div>
-              <div className="p-6">
-                {confirmedAppointments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-gray-500">No confirmed appointments</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {confirmedAppointments.map(appointment => {
-                      const property = getProperty(appointment.propertyId);
-                      
-                      return (
-                        <div 
-                          key={appointment.id} 
-                          className="border rounded-lg p-4 hover:border-blue-400 cursor-pointer transition-colors"
-                          onClick={() => setSelectedAppointment(appointment)}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h4 className="font-semibold text-lg">{property?.title}</h4>
-                              <p className="text-gray-600 text-sm">{property?.address}</p>
-                            </div>
-                            <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
-                              {appointment.status}
-                            </span>
-                          </div>
-                          <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-500">Date</p>
-                              <p className="font-medium">{formatDate(appointment.date)}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-500">Time</p>
-                              <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
-                            </div>
-                          </div>
-                          <p className="mt-3 text-sm text-blue-600">Click to view details</p>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Quick Link to Calendar */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">My Availability</h2>
-                  <p className="text-sm text-gray-500 mt-1">Manage your schedule and time slots</p>
+                {/* Confirmed Appointments */}
+                <div className="bg-white rounded-lg shadow-md">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-xl font-semibold text-gray-900">Upcoming Appointments</h2>
+                  </div>
+                  <div className="p-6">
+                    {confirmedAppointments.length === 0 ? (
+                      <div className="text-center py-8">
+                        <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p className="text-gray-500">No confirmed appointments</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {confirmedAppointments.map(appointment => {
+                          const property = getProperty(appointment.propertyId);
+                          return (
+                            <div 
+                              key={appointment.id} 
+                              className="border rounded-lg p-4 hover:border-blue-400 cursor-pointer transition-colors"
+                              onClick={() => setSelectedAppointment(appointment)}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h4 className="font-semibold text-lg">{property?.title}</h4>
+                                  <p className="text-gray-600 text-sm">{property?.address}</p>
+                                </div>
+                                <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
+                                  {appointment.status}
+                                </span>
+                              </div>
+                              <div className="mt-3 grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-gray-500">Date</p>
+                                  <p className="font-medium">{formatDate(appointment.date)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">Time</p>
+                                  <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
+                                </div>
+                              </div>
+                              <p className="mt-3 text-sm text-blue-600">Click to view details</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <Link
-                  to="/agent/calendar"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Open Calendar
-                </Link>
-              </div>
-            </div>
+
+                {/* Quick Link to Calendar */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-900">My Availability</h2>
+                      <p className="text-sm text-gray-500 mt-1">Manage your schedule and time slots</p>
+                    </div>
+                    <Link
+                      to="/agent/calendar"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Open Calendar
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Purchase Priority Queue */}
+                {propertiesWithQueue.length > 0 && (
+                  <div className="bg-white rounded-lg shadow-md">
+                    <div className="px-6 py-4 border-b border-gray-200">
+                      <h2 className="text-xl font-semibold text-gray-900">Purchase Priority Queue</h2>
+                      <p className="text-sm text-gray-500 mt-1">View customer priority order by property</p>
+                    </div>
+                    <div className="p-6">
+                      <div className="space-y-4">
+                        {propertiesWithQueue.map(propertyId => {
+                          const property = getProperty(propertyId);
+                          const queue = getPurchasePriorityQueue(propertyId);
+                          const isExpanded = showQueueForProperty === propertyId;
+                          return (
+                            <div key={propertyId} className="border rounded-lg">
+                              <button
+                                onClick={() => setShowQueueForProperty(isExpanded ? null : propertyId)}
+                                className="w-full p-4 flex items-center justify-between hover:bg-gray-50 rounded-lg"
+                              >
+                                <div className="text-left">
+                                  <h4 className="font-medium">{property?.title || 'Unknown Property'}</h4>
+                                  <p className="text-sm text-gray-500">{queue.length} customer{queue.length !== 1 ? 's' : ''} in queue</p>
+                                </div>
+                                <svg 
+                                  className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              {isExpanded && queue.length > 0 && (
+                                <div className="px-4 pb-4">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left text-gray-600">#</th>
+                                        <th className="px-3 py-2 text-left text-gray-600">Customer</th>
+                                        <th className="px-3 py-2 text-left text-gray-600">Booked</th>
+                                        <th className="px-3 py-2 text-left text-gray-600">Viewing</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {queue.map((appt, index) => {
+                                        const customer = getCustomer(appt.customerId);
+                                        return (
+                                          <tr key={appt.id} className={`border-t ${index === 0 ? 'bg-green-50' : ''}`}>
+                                            <td className="px-3 py-2">
+                                              {index === 0 ? (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">1st</span>
+                                              ) : (
+                                                <span className="text-gray-600">{index + 1}</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2 font-medium">{customer?.name || appt.customerName || 'Unknown'}</td>
+                                            <td className="px-3 py-2 text-gray-500">{formatRelativeTime(appt.createdAt)}</td>
+                                            <td className="px-3 py-2 text-gray-500">{formatDate(appt.date)}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                  <p className="mt-3 text-xs text-gray-500">Priority is determined by booking timestamp (earliest first).</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -338,9 +405,7 @@ export default function AgentDashboard() {
                               <h4 className="font-semibold text-lg text-gray-900">{property.title}</h4>
                               <p className="text-gray-600 text-sm">{property.address}, {property.city}</p>
                             </div>
-                            <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
-                              SOLD
-                            </span>
+                            <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">SOLD</span>
                           </div>
                           <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
                             <div>
@@ -360,92 +425,6 @@ export default function AgentDashboard() {
                       ))}
                     </div>
                   )}
-
-            {/* Purchase Priority Queue */}
-            {propertiesWithQueue.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-900">Purchase Priority Queue</h2>
-                  <p className="text-sm text-gray-500 mt-1">View customer priority order by property</p>
-                </div>
-                <div className="p-6">
-                  <div className="space-y-4">
-                    {propertiesWithQueue.map(propertyId => {
-                      const property = getProperty(propertyId);
-                      const queue = getPurchasePriorityQueue(propertyId);
-                      const isExpanded = showQueueForProperty === propertyId;
-                      
-                      return (
-                        <div key={propertyId} className="border rounded-lg">
-                          <button
-                            onClick={() => setShowQueueForProperty(isExpanded ? null : propertyId)}
-                            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 rounded-lg"
-                          >
-                            <div className="text-left">
-                              <h4 className="font-medium">{property?.title || 'Unknown Property'}</h4>
-                              <p className="text-sm text-gray-500">{queue.length} customer{queue.length !== 1 ? 's' : ''} in queue</p>
-                            </div>
-                            <svg 
-                              className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                          
-                          {isExpanded && queue.length > 0 && (
-                            <div className="px-4 pb-4">
-                              <table className="w-full text-sm">
-                                <thead className="bg-gray-50">
-                                  <tr>
-                                    <th className="px-3 py-2 text-left text-gray-600">#</th>
-                                    <th className="px-3 py-2 text-left text-gray-600">Customer</th>
-                                    <th className="px-3 py-2 text-left text-gray-600">Booked</th>
-                                    <th className="px-3 py-2 text-left text-gray-600">Viewing</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {queue.map((appt, index) => {
-                                    const customer = getCustomer(appt.customerId);
-                                    return (
-                                      <tr 
-                                        key={appt.id} 
-                                        className={`border-t ${index === 0 ? 'bg-green-50' : ''}`}
-                                      >
-                                        <td className="px-3 py-2">
-                                          {index === 0 ? (
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                              1st
-                                            </span>
-                                          ) : (
-                                            <span className="text-gray-600">{index + 1}</span>
-                                          )}
-                                        </td>
-                                        <td className="px-3 py-2 font-medium">
-                                          {customer?.name || appt.customerName || 'Unknown'}
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-500">
-                                          {formatRelativeTime(appt.createdAt)}
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-500">
-                                          {formatDate(appt.date)}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                              <p className="mt-3 text-xs text-gray-500">
-                                Priority is determined by booking timestamp (earliest first).
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               </div>
             )}
@@ -456,13 +435,11 @@ export default function AgentDashboard() {
             {/* Metrics */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">My Metrics</h2>
-              
               <div className="space-y-4">
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-600">Properties Sold</p>
                   <p className="text-3xl font-bold text-blue-800">{agent.salesCount}</p>
                 </div>
-
                 {agent.soldProperties.length > 0 && (
                   <div>
                     <p className="text-sm text-gray-500 mb-2">My Sold Properties</p>
@@ -475,9 +452,7 @@ export default function AgentDashboard() {
                             <p className="font-medium">{prop.title}</p>
                             <div className="flex justify-between items-center mt-1">
                               <span className="text-green-600">{prop.salePrice ? formatCurrency(prop.salePrice) : formatCurrency(prop.price)}</span>
-                              {prop.soldDate && (
-                                <span className="text-xs text-gray-400">{formatDate(prop.soldDate)}</span>
-                              )}
+                              {prop.soldDate && <span className="text-xs text-gray-400">{formatDate(prop.soldDate)}</span>}
                             </div>
                           </div>
                         ))}
@@ -490,12 +465,10 @@ export default function AgentDashboard() {
             {/* Rating */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">My Rating</h2>
-              
               <div className="text-center mb-4">
                 <p className="text-4xl font-bold text-yellow-500">{agent.rating.toFixed(1)}</p>
                 <p className="text-yellow-500 text-lg">{generateStars(agent.rating)}</p>
               </div>
-
               {agent.latestRatings.length > 0 && (
                 <div>
                   <p className="text-sm text-gray-500 mb-2">Latest Reviews</p>
@@ -519,9 +492,7 @@ export default function AgentDashboard() {
               <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
                 {unreadNotifications.length > 0 && (
-                  <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                    {unreadNotifications.length}
-                  </span>
+                  <span className="px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">{unreadNotifications.length}</span>
                 )}
               </div>
               <div className="max-h-64 overflow-y-auto">
@@ -529,11 +500,7 @@ export default function AgentDashboard() {
                   <p className="p-6 text-gray-500 text-center">No notifications</p>
                 ) : (
                   agentNotifications.slice(0, 5).map(notification => (
-                    <NotificationItem
-                      key={notification.id}
-                      notification={notification}
-                      onMarkRead={markNotificationRead}
-                    />
+                    <NotificationItem key={notification.id} notification={notification} onMarkRead={markNotificationRead} />
                   ))
                 )}
               </div>
@@ -542,24 +509,15 @@ export default function AgentDashboard() {
             {/* SMS Verification Status */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Status</h2>
-              <div className={`flex items-center justify-between p-3 rounded-lg ${
-                agent.smsVerified ? 'bg-green-50' : 'bg-yellow-50'
-              }`}>
+              <div className={`flex items-center justify-between p-3 rounded-lg ${agent.smsVerified ? 'bg-green-50' : 'bg-yellow-50'}`}>
                 <div className="flex items-center">
-                  <span className={`w-3 h-3 rounded-full mr-3 ${
-                    agent.smsVerified ? 'bg-green-500' : 'bg-yellow-500'
-                  }`}></span>
+                  <span className={`w-3 h-3 rounded-full mr-3 ${agent.smsVerified ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
                   <span className={agent.smsVerified ? 'text-green-800' : 'text-yellow-800'}>
                     Phone {agent.smsVerified ? 'Verified' : 'Not Verified'}
                   </span>
                 </div>
                 {!agent.smsVerified && (
-                  <button
-                    onClick={handleSmsVerify}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Verify
-                  </button>
+                  <button onClick={handleSmsVerify} className="text-sm text-blue-600 hover:text-blue-800">Verify</button>
                 )}
               </div>
             </div>
