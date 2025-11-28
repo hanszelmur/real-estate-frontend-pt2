@@ -37,6 +37,8 @@ export interface Property {
   soldByAgentId?: string; // Agent who sold the property
   // Agent assignment for property management
   assignedAgentId?: string; // Primary agent assigned to this property
+  // Exclusive viewing mode - only one customer per start time when enabled
+  isExclusive?: boolean;
 }
 
 // Agent interface (extends User with agent-specific fields)
@@ -47,6 +49,7 @@ export interface Agent extends User {
   soldProperties: string[]; // property IDs
   isOnVacation: boolean;
   availability: AgentAvailability[];
+  unavailablePeriods?: AgentUnavailablePeriod[]; // Custom blocked periods (lunch, personal events, etc.)
   latestRatings: AgentRating[];
   profilePicUrl?: string; // Profile picture URL
   smsVerified?: boolean; // SMS verification status for messaging
@@ -57,9 +60,18 @@ export interface AgentAvailability {
   id: string;
   date: string; // ISO date string
   startTime: string; // HH:mm format
-  endTime: string; // HH:mm format
+  endTime?: string; // HH:mm format - optional (start-time-only selection)
   isBooked: boolean;
   bookingId?: string;
+}
+
+// Agent unavailable period (blocked time, e.g., lunch, personal events)
+export interface AgentUnavailablePeriod {
+  id: string;
+  date: string; // ISO date string
+  startTime: string; // HH:mm format
+  endTime: string; // HH:mm format
+  reason?: string; // e.g., "Lunch break", "Personal event"
 }
 
 // Agent rating
@@ -92,8 +104,9 @@ export interface Appointment {
    * - 'done': Agent marked viewing as finished, property still available
    * - 'sold': Agent marked property as sold during/after viewing
    * - 'cancelled': Appointment was cancelled by customer or admin
+   * - 'queued': Customer is waitlisted for an exclusive slot
    */
-  status: 'pending' | 'pending_approval' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled' | 'done' | 'sold';
+  status: 'pending' | 'pending_approval' | 'accepted' | 'rejected' | 'scheduled' | 'completed' | 'cancelled' | 'done' | 'sold' | 'queued';
   // Race logic fields
   hasViewingRights: boolean;
   hasPurchaseRights: boolean;
@@ -107,6 +120,8 @@ export interface Appointment {
   // Agent reassignment tracking
   previousAgentId?: string; // Previous agent before rejection/reassignment
   rejectionReason?: string; // Reason for rejection
+  // Waitlist/queue position for exclusive properties
+  queuePosition?: number; // Position in waitlist (1 = confirmed, 2+ = queued)
 }
 
 // Message for appointment-specific messaging
@@ -123,7 +138,7 @@ export interface AppointmentMessage {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'viewing_done' | 'property_sold' | 'property_available' | 'viewing_queued' | 'priority_promoted' | 'appointment_cancelled' | 'appointment_reminder';
+  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'viewing_done' | 'property_sold' | 'property_available' | 'viewing_queued' | 'priority_promoted' | 'appointment_cancelled' | 'appointment_reminder' | 'queue_promoted' | 'slot_waitlisted';
   title: string;
   message: string;
   read: boolean;

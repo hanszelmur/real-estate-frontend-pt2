@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import type { Agent, Appointment } from '../../types';
-import { formatDate, formatTimeRange, formatRelativeTime, generateStars, formatCurrency } from '../../utils/helpers';
+import { formatDate, formatTime, formatRelativeTime, generateStars, formatCurrency } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 import AddPropertyModal from '../../components/common/AddPropertyModal';
@@ -237,7 +237,7 @@ export default function AgentDashboard() {
                                 </div>
                                 <div>
                                   <p className="text-gray-500">Time</p>
-                                  <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
+                                  <p className="font-medium">{formatTime(appointment.startTime)}</p>
                                 </div>
                               </div>
                               <p className="mt-3 text-sm text-yellow-700">Click to view details and respond</p>
@@ -288,7 +288,7 @@ export default function AgentDashboard() {
                                 </div>
                                 <div>
                                   <p className="text-gray-500">Time</p>
-                                  <p className="font-medium">{formatTimeRange(appointment.startTime, appointment.endTime)}</p>
+                                  <p className="font-medium">{formatTime(appointment.startTime)}</p>
                                 </div>
                               </div>
                               <p className="mt-3 text-sm text-blue-600">Click to view details</p>

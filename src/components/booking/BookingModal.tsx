@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Property, Agent, AgentAvailability } from '../../types';
 import { useApp, BOOKING_WINDOW_DAYS } from '../../context/AppContext';
-import { formatDate, formatTimeRange, randomSelect } from '../../utils/helpers';
+import { formatDate, formatTime, randomSelect } from '../../utils/helpers';
 import AgentCard from '../common/AgentCard';
 
 interface BookingModalProps {
@@ -13,7 +13,19 @@ interface BookingModalProps {
 type BookingStep = 'agent' | 'time' | 'confirm';
 
 export default function BookingModal({ property, onClose, onSuccess }: BookingModalProps) {
-  const { currentUser, getAvailableAgents, createAppointment, hasAgentConflict, users, updateAgentAvailability, addNotification, isDateWithinBookingWindow, getCustomerPriorityPosition } = useApp();
+  const { 
+    currentUser, 
+    getAvailableAgents, 
+    createAppointment, 
+    hasAgentConflict, 
+    users, 
+    updateAgentAvailability, 
+    addNotification, 
+    isDateWithinBookingWindow, 
+    getCustomerPriorityPosition,
+    isStartTimeAvailable,
+    getSlotWaitlist
+  } = useApp();
   const [step, setStep] = useState<BookingStep>('agent');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AgentAvailability | null>(null);
@@ -22,8 +34,8 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
   const availableAgents = getAvailableAgents();
 
-  // Get available time slots for selected agent (with double-booking prevention and 7-day window)
-  const getAvailableSlots = (agent: Agent): AgentAvailability[] => {
+  // Get available START TIMES for selected agent (start-time-only selection)
+  const getAvailableStartTimes = (agent: Agent): AgentAvailability[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -35,8 +47,14 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
       // Enforce 7-day rolling window
       if (!isDateWithinBookingWindow(slot.date)) return false;
       
-      // Check for double-booking - ensure agent doesn't have conflicting appointments
-      const hasConflict = hasAgentConflict(agent.id, slot.date, slot.startTime, slot.endTime);
+      // Check for unavailable periods and conflicts using start time only
+      if (!isStartTimeAvailable(agent.id, slot.date, slot.startTime)) return false;
+      
+      // For exclusive properties, the slot is still "available" - they'll be added to waitlist
+      // For non-exclusive properties, allow booking even if slot is taken (group viewing)
+      
+      // Check for double-booking - ensure agent doesn't have conflicting appointments with other customers
+      const hasConflict = hasAgentConflict(agent.id, slot.date, slot.startTime, undefined);
       return !hasConflict;
     });
   };
@@ -52,6 +70,18 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     }, {} as Record<string, AgentAvailability[]>);
   };
 
+  // Check if a slot has existing bookings (for exclusive properties)
+  const getExistingBookingsForSlot = (slot: AgentAvailability): number => {
+    if (!selectedAgent) return 0;
+    const waitlist = getSlotWaitlist(property.id, selectedAgent.id, slot.date, slot.startTime);
+    return waitlist.length;
+  };
+
+  // Get the position customer would be in the waitlist
+  const getWaitlistPositionForSlot = (slot: AgentAvailability): number => {
+    return getExistingBookingsForSlot(slot) + 1;
+  };
+
   const handleAgentSelect = (agent: Agent) => {
     setSelectedAgent(agent);
     setAutoAssign(false);
@@ -61,7 +91,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
   const handleAutoAssign = () => {
     // Find agents with available slots (not just not on vacation)
-    const agentsWithSlots = availableAgents.filter(agent => getAvailableSlots(agent).length > 0);
+    const agentsWithSlots = availableAgents.filter(agent => getAvailableStartTimes(agent).length > 0);
     const randomAgent = randomSelect(agentsWithSlots);
     if (randomAgent) {
       setSelectedAgent(randomAgent);
@@ -81,9 +111,9 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
   const handleConfirm = () => {
     if (!selectedAgent || !selectedSlot || !currentUser) return;
 
-    // Final double-booking check before creating appointment
-    if (hasAgentConflict(selectedAgent.id, selectedSlot.date, selectedSlot.startTime, selectedSlot.endTime)) {
-      setBookingError('This time slot is no longer available. Please select a different time.');
+    // Final check before creating appointment
+    if (!isStartTimeAvailable(selectedAgent.id, selectedSlot.date, selectedSlot.startTime)) {
+      setBookingError('This start time is no longer available. Please select a different time.');
       setSelectedSlot(null);
       setStep('time');
       return;
@@ -95,34 +125,53 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     // Check race condition - determine if this customer gets purchase rights
     const hasPurchaseRights = !property.firstViewerCustomerId || property.firstViewerCustomerId === currentUser.id;
 
-    // Create the appointment - auto-accept if slot is available (agent can reject later)
+    // Check waitlist position for exclusive properties
+    const waitlist = getSlotWaitlist(property.id, selectedAgent.id, selectedSlot.date, selectedSlot.startTime);
+    const queuePosition = waitlist.length + 1;
+    const isQueued = property.isExclusive && waitlist.length > 0;
+
+    // Create the appointment - status depends on exclusive logic
     const newAppointment = createAppointment({
       propertyId: property.id,
       customerId: currentUser.id,
       agentId: selectedAgent.id,
       date: selectedSlot.date,
       startTime: selectedSlot.startTime,
-      endTime: selectedSlot.endTime,
-      status: 'pending', // Starts as pending, agent can accept/reject
-      hasViewingRights: true,
-      hasPurchaseRights,
+      // No endTime - agent controls when viewing ends
+      status: isQueued ? 'queued' : 'pending', // Queued if exclusive slot is taken, otherwise pending
+      hasViewingRights: !isQueued, // Only first in queue has viewing rights initially
+      hasPurchaseRights: !isQueued && hasPurchaseRights,
+      queuePosition: isQueued ? queuePosition : undefined,
       customerName: customer?.name,
       customerEmail: customer?.email,
       customerPhone: customer?.phone,
     });
 
-    // Mark the slot as booked
-    updateAgentAvailability(selectedAgent.id, selectedSlot.id, true, newAppointment.id);
+    // Mark the slot as booked only if this is the first booking
+    if (!isQueued) {
+      updateAgentAvailability(selectedAgent.id, selectedSlot.id, true, newAppointment.id);
+    }
 
-    // Notify customer about pending status
-    addNotification({
-      userId: currentUser.id,
-      type: 'booking_pending',
-      title: 'Booking Submitted',
-      message: `Your viewing request for ${property.title} has been submitted. The agent will confirm shortly.`,
-      read: false,
-      relatedId: newAppointment.id,
-    });
+    // Notify customer about status
+    if (isQueued) {
+      addNotification({
+        userId: currentUser.id,
+        type: 'slot_waitlisted',
+        title: 'Added to Waitlist',
+        message: `You are #${queuePosition} in line for the ${formatTime(selectedSlot.startTime)} slot on ${formatDate(selectedSlot.date)} at ${property.title}. You will be notified if promoted.`,
+        read: false,
+        relatedId: newAppointment.id,
+      });
+    } else {
+      addNotification({
+        userId: currentUser.id,
+        type: 'booking_pending',
+        title: 'Booking Submitted',
+        message: `Your viewing request for ${property.title} at ${formatTime(selectedSlot.startTime)} has been submitted. The agent will confirm shortly.`,
+        read: false,
+        relatedId: newAppointment.id,
+      });
+    }
 
     onSuccess();
   };
@@ -173,7 +222,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
       {/* Agent list */}
       <div className="mt-4 space-y-3 max-h-64 overflow-y-auto">
         {availableAgents.map(agent => {
-          const slotsAvailable = getAvailableSlots(agent).length;
+          const slotsAvailable = getAvailableStartTimes(agent).length;
           return (
             <div key={agent.id} className="relative">
               <AgentCard
@@ -189,7 +238,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
               )}
               {slotsAvailable > 0 && (
                 <span className="absolute top-2 right-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
-                  {slotsAvailable} slots
+                  {slotsAvailable} times
                 </span>
               )}
             </div>
@@ -218,12 +267,12 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
   const renderTimeStep = () => {
     if (!selectedAgent) return null;
 
-    const availableSlots = getAvailableSlots(selectedAgent);
+    const availableSlots = getAvailableStartTimes(selectedAgent);
     const groupedSlots = groupSlotsByDate(availableSlots);
 
     return (
       <div>
-        <h3 className="text-lg font-semibold mb-2">Select a Time</h3>
+        <h3 className="text-lg font-semibold mb-2">Select a Start Time</h3>
         <p className="text-sm text-gray-500 mb-2">
           Available times with {selectedAgent.name}
         </p>
@@ -235,6 +284,15 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
           </p>
         </div>
 
+        {/* Exclusive Property Notice */}
+        {property.isExclusive && (
+          <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+            <p className="text-sm text-purple-700">
+              <strong>Exclusive Viewing:</strong> This property has exclusive viewings. If your selected time is taken, you'll be added to the waitlist.
+            </p>
+          </div>
+        )}
+
         {bookingError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-sm text-red-700">{bookingError}</p>
@@ -243,8 +301,8 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
         {Object.keys(groupedSlots).length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p>No available slots for this agent within the {BOOKING_WINDOW_DAYS}-day window.</p>
-            <p className="text-sm mt-1">All slots may be booked or blocked.</p>
+            <p>No available times for this agent within the {BOOKING_WINDOW_DAYS}-day window.</p>
+            <p className="text-sm mt-1">All times may be booked or blocked.</p>
             <button
               onClick={() => setStep('agent')}
               className="mt-2 text-blue-600 hover:underline"
@@ -259,20 +317,38 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
                   {formatDate(date)}
                 </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  {slots.map(slot => (
-                    <button
-                      key={slot.id}
-                      onClick={() => handleSlotSelect(slot)}
-                      className={`p-2 text-sm rounded-md border transition-colors ${
-                        selectedSlot?.id === slot.id
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-200 hover:border-blue-300'
-                      }`}
-                    >
-                      {formatTimeRange(slot.startTime, slot.endTime)}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-2">
+                  {slots.map(slot => {
+                    const existingBookings = getExistingBookingsForSlot(slot);
+                    const wouldBeQueued = property.isExclusive && existingBookings > 0;
+                    const waitlistPosition = getWaitlistPositionForSlot(slot);
+                    
+                    return (
+                      <button
+                        key={slot.id}
+                        onClick={() => handleSlotSelect(slot)}
+                        className={`p-2 text-sm rounded-md border transition-colors ${
+                          selectedSlot?.id === slot.id
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : wouldBeQueued
+                            ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
+                            : 'border-gray-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="font-medium">{formatTime(slot.startTime)}</div>
+                        {wouldBeQueued && (
+                          <div className="text-xs text-yellow-700 mt-1">
+                            #{waitlistPosition} in line
+                          </div>
+                        )}
+                        {!property.isExclusive && existingBookings > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Group ({existingBookings + 1})
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -301,23 +377,30 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
   const renderConfirmStep = () => {
     if (!selectedAgent || !selectedSlot) return null;
 
+    // Check waitlist status for exclusive properties
+    const waitlist = getSlotWaitlist(property.id, selectedAgent.id, selectedSlot.date, selectedSlot.startTime);
+    const isQueued = property.isExclusive && waitlist.length > 0;
+    const queuePosition = waitlist.length + 1;
+
     // Check if customer will have purchase rights
-    const willHavePurchaseRights = !property.firstViewerCustomerId || property.firstViewerCustomerId === currentUser?.id;
+    const willHavePurchaseRights = !isQueued && (!property.firstViewerCustomerId || property.firstViewerCustomerId === currentUser?.id);
     
     // Get current priority position (0 means they'll be first, otherwise their position in queue)
     const currentPosition = currentUser ? getCustomerPriorityPosition(property.id, currentUser.id) : 0;
-    const queuePosition = currentPosition > 0 ? currentPosition : 1; // Will be 1 if not in queue (will be first)
+    const purchasePriorityPosition = currentPosition > 0 ? currentPosition : 1;
     
     // Professional priority text
     const getPriorityText = () => {
-      if (willHavePurchaseRights) {
+      if (isQueued) {
+        return `You will be #${queuePosition} in the waitlist for this time slot.`;
+      } else if (willHavePurchaseRights) {
         return 'You will hold the first right to purchase this property.';
-      } else if (queuePosition === 2) {
+      } else if (purchasePriorityPosition === 2) {
         return 'You will be second in line for purchase rights.';
-      } else if (queuePosition === 3) {
+      } else if (purchasePriorityPosition === 3) {
         return 'You will be third in line for purchase rights.';
       } else {
-        return `You will be ${queuePosition}${getOrdinalSuffix(queuePosition)} in line for purchase rights.`;
+        return `You will be ${purchasePriorityPosition}${getOrdinalSuffix(purchasePriorityPosition)} in line for purchase rights.`;
       }
     };
     
@@ -337,53 +420,81 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
           </div>
         )}
 
-        {/* Priority Information */}
-        <div className={`mb-4 p-4 rounded-lg ${willHavePurchaseRights ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
-          <div className="flex items-start">
-            <svg className={`w-5 h-5 mt-0.5 mr-2 ${willHavePurchaseRights ? 'text-green-600' : 'text-yellow-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {willHavePurchaseRights ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              )}
-            </svg>
-            <div>
-              <p className={`text-sm font-medium ${willHavePurchaseRights ? 'text-green-800' : 'text-yellow-800'}`}>
-                {willHavePurchaseRights ? 'Priority Purchase Rights' : 'Queue Position'}
-              </p>
-              <p className={`text-sm mt-1 ${willHavePurchaseRights ? 'text-green-700' : 'text-yellow-700'}`}>
-                {getPriorityText()}
-              </p>
-              {!willHavePurchaseRights && (
-                <p className="text-xs text-yellow-600 mt-2">
-                  Priority is determined by booking timestamp, not viewing date. If customers ahead of you cancel or decline, you will be promoted.
+        {/* Waitlist Notice for Exclusive Properties */}
+        {isQueued && (
+          <div className="mb-4 p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+            <div className="flex items-start">
+              <svg className="w-5 h-5 mt-0.5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-yellow-800">
+                  Waitlist Position: #{queuePosition}
                 </p>
-              )}
+                <p className="text-sm mt-1 text-yellow-700">
+                  This exclusive slot is taken. You'll be added to the waitlist and notified automatically if promoted.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Priority Information (for non-queued bookings) */}
+        {!isQueued && (
+          <div className={`mb-4 p-4 rounded-lg ${willHavePurchaseRights ? 'bg-green-50 border border-green-200' : 'bg-blue-50 border border-blue-200'}`}>
+            <div className="flex items-start">
+              <svg className={`w-5 h-5 mt-0.5 mr-2 ${willHavePurchaseRights ? 'text-green-600' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {willHavePurchaseRights ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                )}
+              </svg>
+              <div>
+                <p className={`text-sm font-medium ${willHavePurchaseRights ? 'text-green-800' : 'text-blue-800'}`}>
+                  {willHavePurchaseRights ? 'Priority Purchase Rights' : 'Queue Position'}
+                </p>
+                <p className={`text-sm mt-1 ${willHavePurchaseRights ? 'text-green-700' : 'text-blue-700'}`}>
+                  {getPriorityText()}
+                </p>
+                {!willHavePurchaseRights && !isQueued && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    Priority is determined by booking timestamp. If customers ahead of you cancel, you will be promoted.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-3 bg-gray-50 rounded-lg p-4">
           <div>
             <p className="text-sm text-gray-500">Property</p>
             <p className="font-medium">{property.title}</p>
+            {property.isExclusive && (
+              <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+                Exclusive Viewing
+              </span>
+            )}
           </div>
           <div>
             <p className="text-sm text-gray-500">Agent</p>
             <p className="font-medium">{selectedAgent.name}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Viewing Date & Time</p>
+            <p className="text-sm text-gray-500">Viewing Date & Start Time</p>
             <p className="font-medium">
-              {formatDate(selectedSlot.date)} at {formatTimeRange(selectedSlot.startTime, selectedSlot.endTime)}
+              {formatDate(selectedSlot.date)} at {formatTime(selectedSlot.startTime)}
             </p>
           </div>
         </div>
 
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-700">
-            <strong>Note:</strong> Your booking will be submitted as pending. The agent will confirm your appointment shortly.
-            You can cancel at any time from your dashboard, which will release your priority position.
+            <strong>Note:</strong> {isQueued 
+              ? 'You will be added to the waitlist. If the customer ahead of you cancels, you will be automatically promoted and notified.'
+              : 'Your booking will be submitted as pending. The agent will confirm your appointment shortly. You can cancel at any time from your dashboard.'
+            }
           </p>
         </div>
 
@@ -396,9 +507,13 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
           </button>
           <button
             onClick={handleConfirm}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            className={`px-4 py-2 text-white rounded-md ${
+              isQueued 
+                ? 'bg-yellow-600 hover:bg-yellow-700' 
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
           >
-            Submit Booking
+            {isQueued ? 'Join Waitlist' : 'Submit Booking'}
           </button>
         </div>
       </div>

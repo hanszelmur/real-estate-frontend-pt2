@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatDate, formatTimeRange, formatRelativeTime, getInitials } from '../../utils/helpers';
+import { formatDate, formatTime, formatRelativeTime, getInitials } from '../../utils/helpers';
 import type { Appointment } from '../../types';
 
 interface ChatDrawerProps {
@@ -189,7 +189,7 @@ export default function ChatDrawer({ isOpen, onClose }: ChatDrawerProps) {
                       {selectedProperty?.title}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {formatDate(selectedAppointment.date)} • {formatTimeRange(selectedAppointment.startTime, selectedAppointment.endTime)}
+                      {formatDate(selectedAppointment.date)} • {formatTime(selectedAppointment.startTime)}
                     </p>
                   </div>
                   {selectedAgent && currentUser.role === 'customer' && (
