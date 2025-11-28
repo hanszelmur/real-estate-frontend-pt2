@@ -274,10 +274,11 @@ FUNCTION isAgentAvailable(agentId, date, startTime, endTime):
            AND timeOverlaps(startTime, endTime, appointment.startTime, appointment.endTime):
             RETURN false
     
-    // Check 2-hour buffer after completed appointments
+    // Check configurable buffer after completed appointments
+    // Buffer period defined by AGENT_BUFFER_HOURS constant (default: 2 hours)
     completedAppts = getCompletedAppointments(agentId, date)
     FOR EACH completed IN completedAppts:
-        bufferEnd = completed.endTime + 2 hours
+        bufferEnd = completed.endTime + AGENT_BUFFER_HOURS
         IF startTime < bufferEnd THEN RETURN false
     
     RETURN true
@@ -325,9 +326,9 @@ FUNCTION markPropertySold(propertyId, salePrice, agentId):
 
 ## ⚠️ DO NOT BREAK - Business Rules
 
-1. **7-Day Booking Window**: NEVER allow bookings beyond 7 days from today
+1. **7-Day Booking Window**: NEVER allow bookings beyond 7 days from today (configurable via `BOOKING_WINDOW_DAYS`)
 2. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times (global across all properties)
-3. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing (done or sold status)
+3. **Buffer Period**: Agent unavailable for configurable hours after completing a viewing (configurable via `AGENT_BUFFER_HOURS`, default: 2 hours)
 4. **Race Logic**: First viewer ALWAYS gets purchase rights (by earliest booking timestamp, NOT viewing date)
 5. **Priority Promotion**: When first-in-line cancels, ALWAYS promote next customer automatically
 6. **Priority Display**: Show priority position to ALL customers, not just first
@@ -339,6 +340,7 @@ FUNCTION markPropertySold(propertyId, salePrice, agentId):
 12. **Cascade Cancellation**: When property is marked sold, ALL other pending appointments for that property must be cancelled automatically
 13. **Instant Availability**: When marked done, property MUST become immediately available for new bookings
 14. **Property Assignment**: Only assigned agent or admin can edit a property
+15. **Session Check**: All protected routes MUST redirect unauthenticated users to login
 
 ---
 
@@ -378,9 +380,8 @@ export const BOOKING_WINDOW_DAYS = 7;  // ← Modify this value
 
 ### Modifying Buffer Period
 ```typescript
-// In AgentCalendar.tsx - getBufferSlotsForDate()
-// Change the '2' to desired hours
-for (let i = 0; i < 2; i++) {  // ← Modify this value
+// In src/context/AppContext.tsx
+export const AGENT_BUFFER_HOURS = 2;  // ← Modify this value (hours of rest after viewing)
 ```
 
 ### Adding New Notification Types
@@ -514,6 +515,9 @@ All notifications are **system-generated** and one-way. Users cannot reply to no
 | `property_sold` | Buyer | Congratulations on purchase |
 | `property_sold` | Other customers | Pending viewing cancelled due to sale |
 | `viewing_queued` | Customer | Viewing queued due to prior bookings |
+| `appointment_reminder` | Agent & Customer | Upcoming appointment reminder (24 hours before) |
+| `priority_promoted` | Customer | Promoted in purchase queue after cancellation |
+| `appointment_cancelled` | Agent | Customer cancelled their appointment |
 
 ### Messaging (Two-Way Chat)
 - **Requirements**: Both customer AND agent must be SMS verified
@@ -533,6 +537,43 @@ addNotification({
   relatedId: appointmentOrPropertyId,
 });
 ```
+
+### Appointment Reminders
+The system includes built-in reminder functionality:
+- **Timing**: Reminders sent 24 hours before scheduled appointments
+- **Recipients**: Both agent AND customer receive reminders
+- **Deduplication**: Only one reminder per appointment per day
+- **Usage**: Call `sendAppointmentReminders()` from AppContext (typically in a scheduled job or on app load)
+
+```typescript
+// To send reminders (e.g., in a useEffect or scheduled task)
+const { sendAppointmentReminders } = useApp();
+sendAppointmentReminders();
+```
+
+---
+
+## 🔄 Real-Time Sync Considerations
+
+This demo application uses React Context for state management. For production deployment with real-time features:
+
+### Current Implementation
+- All state managed via `AppContext.tsx`
+- Changes are immediately reflected across all components
+- State is reset on page refresh (no persistence)
+
+### Production Enhancement Recommendations
+1. **WebSocket Integration**: Add Socket.io or similar for real-time updates across clients
+2. **Backend API**: Replace mock data with actual REST/GraphQL API calls
+3. **State Persistence**: Add localStorage/sessionStorage or integrate with a state management library
+4. **Optimistic Updates**: Implement optimistic UI updates with rollback on failure
+5. **Session Management**: Add token-based authentication with refresh tokens
+
+### Session/Authentication Checks
+- All protected pages check `currentUser` state before rendering
+- Unauthenticated users are redirected to login page
+- Role-based access control enforced at component level
+- Demo mode: Role-based login without password (production needs proper auth)
 
 ---
 
@@ -559,7 +600,14 @@ addNotification({
 
 ## 📝 Changelog / What's New
 
-### Latest Release - Appointment & Transaction Enhancements
+### Production-Ready Release (Current)
+- ✅ **Configurable Buffer Period** - Agent rest period now centrally configurable via `AGENT_BUFFER_HOURS` constant
+- ✅ **Appointment Reminder System** - Automated reminders 24 hours before appointments for both agents and customers
+- ✅ **Upcoming Appointments API** - New `getUpcomingAppointments()` function for retrieving upcoming appointments within configurable hours
+- ✅ **Enhanced Documentation** - Complete business logic documentation with real-time sync considerations
+- ✅ **Session Management Guide** - Documentation for production authentication implementation
+
+### Previous Release - Appointment & Transaction Enhancements
 - ✅ **7-Day Rolling Booking Window** - Strict limit on property viewing and booking
 - ✅ **Purchase Priority Queue System** - Fair first-come, first-served by booking timestamp
 - ✅ **Cancel Appointment Feature** - Customer-initiated cancellation with confirmation
@@ -570,15 +618,7 @@ addNotification({
 - ✅ **Admin Purchase Queues** - Overview of all property purchase queues
 - ✅ **Enhanced Notifications** - New types for cancellation and priority promotion
 
-### Previous Release
-- ✅ Clean handoff state - no seeded appointments
-- ✅ Full-month agent calendar with day view
-- ✅ Profile/Settings pages for customers and agents
-- ✅ SMS verification flow (demo mode)
-- ✅ Fixed priority warning logic
-- ✅ Comprehensive README documentation
-
-### Enhanced Booking & Sales Update (Latest)
+### Enhanced Booking & Sales Update
 - ✅ **Agent-controlled appointment completion**: Agents can mark viewings as 'done' or 'sold'
 - ✅ **Instant property availability**: Property becomes available immediately when marked done
 - ✅ **Sold property handling**: Properties marked sold are hidden from customer search
@@ -587,7 +627,14 @@ addNotification({
 - ✅ **New appointment statuses**: Added 'done' and 'sold' status types
 - ✅ **Agent sales tracking**: Sales count and sold properties list updated on sale
 
-### Previous Updates
+### Foundational Release
+- ✅ Clean handoff state - no seeded appointments
+- ✅ Full-month agent calendar with day view
+- ✅ Profile/Settings pages for customers and agents
+- ✅ SMS verification flow (demo mode)
+- ✅ Fixed priority warning logic
+- ✅ Comprehensive README documentation
+
 ### Initial Release
 - Initial booking flow implementation
 - Race logic for property purchase rights
@@ -606,6 +653,7 @@ addNotification({
 5. **Agent Ratings**: Allow customers to rate agents after viewings
 6. **Email Notifications**: Add email alongside in-app notifications
 7. **Property Add/Edit UI**: Full property management interface for agents and admins
+8. **Real-time WebSocket**: Add Socket.io for live updates across clients
 
 ### Maintenance Notes
 - Mock data in `src/data/mockData.ts` - replace with API calls

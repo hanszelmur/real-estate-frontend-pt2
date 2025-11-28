@@ -4,8 +4,9 @@ import type { User, Property, Agent, Appointment, Notification, AdminAlert, User
 import { mockUsers, mockProperties, mockAgents, mockAppointments, mockNotifications, mockAdminAlerts } from '../data/mockData';
 import { v4 as uuidv4 } from 'uuid';
 
-// Constants for booking window
+// Constants for booking window and buffer period
 export const BOOKING_WINDOW_DAYS = 7;
+export const AGENT_BUFFER_HOURS = 2; // Buffer period after completed viewings (in hours)
 
 interface AppContextType {
   // Current user
@@ -62,6 +63,10 @@ interface AppContextType {
   getPurchasePriorityQueue: (propertyId: string) => Appointment[];
   getCustomerPriorityPosition: (propertyId: string, customerId: string) => number;
   isDateWithinBookingWindow: (dateString: string) => boolean;
+
+  // Reminder functions
+  getUpcomingAppointments: (userId: string, role: UserRole, hoursAhead?: number) => Appointment[];
+  sendAppointmentReminders: () => void;
 
   // Messages
   messages: AppointmentMessage[];
@@ -584,6 +589,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return date >= today && date <= maxDate;
   }, []);
 
+  // Get upcoming appointments for a user within specified hours
+  const getUpcomingAppointments = useCallback((userId: string, role: UserRole, hoursAhead: number = 24): Appointment[] => {
+    const now = new Date();
+    const futureTime = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
+    
+    return appointments.filter(a => {
+      // Filter by user role
+      if (role === 'customer' && a.customerId !== userId) return false;
+      if (role === 'agent' && a.agentId !== userId) return false;
+      
+      // Only include accepted/scheduled appointments
+      if (!['accepted', 'scheduled'].includes(a.status)) return false;
+      
+      // Parse appointment date and time
+      const appointmentDateTime = new Date(`${a.date}T${a.startTime}:00`);
+      
+      // Check if appointment is upcoming (between now and futureTime)
+      return appointmentDateTime >= now && appointmentDateTime <= futureTime;
+    }).sort((a, b) => {
+      const aTime = new Date(`${a.date}T${a.startTime}:00`).getTime();
+      const bTime = new Date(`${b.date}T${b.startTime}:00`).getTime();
+      return aTime - bTime;
+    });
+  }, [appointments]);
+
+  // Send appointment reminders for upcoming appointments (agent and customer)
+  const sendAppointmentReminders = useCallback(() => {
+    const now = new Date();
+    const reminderWindow = 24; // Hours before appointment to send reminder
+    
+    appointments.forEach(appointment => {
+      if (!['accepted', 'scheduled'].includes(appointment.status)) return;
+      
+      const appointmentDateTime = new Date(`${appointment.date}T${appointment.startTime}:00`);
+      const hoursUntil = (appointmentDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      
+      // Send reminder if appointment is within 24 hours and more than 1 hour away
+      if (hoursUntil > 1 && hoursUntil <= reminderWindow) {
+        const property = properties.find(p => p.id === appointment.propertyId);
+        
+        // Check if reminder already sent (by checking for existing reminder notification)
+        const existingReminders = notifications.filter(n => 
+          n.type === 'appointment_reminder' && 
+          n.relatedId === appointment.id &&
+          new Date(n.createdAt).toDateString() === now.toDateString()
+        );
+        
+        if (existingReminders.length === 0) {
+          // Send reminder to agent
+          addNotification({
+            userId: appointment.agentId,
+            type: 'appointment_reminder',
+            title: 'Upcoming Viewing Reminder',
+            message: `You have a viewing for ${property?.title || 'a property'} scheduled in ${Math.round(hoursUntil)} hours. Please ensure you are prepared.`,
+            read: false,
+            relatedId: appointment.id,
+          });
+          
+          // Send reminder to customer
+          addNotification({
+            userId: appointment.customerId,
+            type: 'appointment_reminder',
+            title: 'Upcoming Viewing Reminder',
+            message: `Your viewing for ${property?.title || 'a property'} is scheduled in ${Math.round(hoursUntil)} hours. The agent will meet you at ${property?.address || 'the property'}.`,
+            read: false,
+            relatedId: appointment.id,
+          });
+        }
+      }
+    });
+  }, [appointments, properties, notifications, addNotification]);
+
   // Accept appointment
   const acceptAppointment = useCallback((id: string) => {
     const appointment = appointments.find(a => a.id === id);
@@ -1072,6 +1149,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getPurchasePriorityQueue,
     getCustomerPriorityPosition,
     isDateWithinBookingWindow,
+    getUpcomingAppointments,
+    sendAppointmentReminders,
     messages,
     getMessagesByAppointment,
     sendMessage,
