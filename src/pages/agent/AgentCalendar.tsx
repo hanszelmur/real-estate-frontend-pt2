@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Navigate, Link } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { useApp, AGENT_BUFFER_HOURS } from '../../context/AppContext';
 import type { Agent, Appointment } from '../../types';
 import { formatTime, formatTimeRange } from '../../utils/helpers';
 import { 
@@ -72,7 +72,7 @@ export default function AgentCalendar() {
     return agent.availability.filter(s => s.date === dateStr && s.isBooked && !s.bookingId);
   };
 
-  // Get buffer slots (2 hours after completed appointments)
+  // Get buffer slots (configurable hours after completed appointments)
   const getBufferSlotsForDate = (date: Date): string[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const completedAppts = agentAppointments.filter(a => 
@@ -81,7 +81,7 @@ export default function AgentCalendar() {
     
     const bufferTimes: string[] = [];
     completedAppts.forEach(appt => {
-      // Add buffer for 2 hours after end time
+      // Add buffer for configurable hours after end time
       // If no endTime, use startTime + 1 hour as minimum duration
       let endTimeStr = appt.endTime;
       if (!endTimeStr) {
@@ -90,7 +90,7 @@ export default function AgentCalendar() {
         endTimeStr = `${String(defaultEndHour).padStart(2, '0')}:${String(startMins).padStart(2, '0')}`;
       }
       const [hours, mins] = endTimeStr.split(':').map(Number);
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < AGENT_BUFFER_HOURS; i++) {
         const bufferHour = hours + i;
         if (bufferHour < 18) { // Don't buffer past 6 PM
           bufferTimes.push(`${String(bufferHour).padStart(2, '0')}:${String(mins).padStart(2, '0')}`);
@@ -223,7 +223,7 @@ export default function AgentCalendar() {
                   ) : isBuffer ? (
                     <div className="p-3 rounded-lg bg-orange-100 border border-orange-200">
                       <p className="text-sm text-orange-700 font-medium">⏳ Buffer Period</p>
-                      <p className="text-xs text-orange-600">2-hour rest after completed viewing</p>
+                      <p className="text-xs text-orange-600">{AGENT_BUFFER_HOURS}-hour rest after completed viewing</p>
                     </div>
                   ) : (
                     <div className="p-3 text-sm text-gray-400 italic">
@@ -343,7 +343,7 @@ export default function AgentCalendar() {
             </div>
             <div className="flex items-center">
               <span className="w-3 h-3 rounded-full bg-orange-300 mr-2"></span>
-              <span className="text-gray-600">Buffer (2hr post-viewing)</span>
+              <span className="text-gray-600">Buffer ({AGENT_BUFFER_HOURS}hr post-viewing)</span>
             </div>
           </div>
         </div>
