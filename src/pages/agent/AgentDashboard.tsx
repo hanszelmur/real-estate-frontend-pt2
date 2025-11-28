@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import type { Agent, AgentAvailability, Appointment } from '../../types';
+import type { Agent, Appointment } from '../../types';
 import { formatDate, formatTimeRange, generateStars } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
@@ -13,13 +13,11 @@ export default function AgentDashboard() {
     properties,
     users,
     toggleAgentVacation,
-    updateAgentAvailability,
     updateAgentSmsVerification,
     getNotificationsByUser,
     markNotificationRead,
   } = useApp();
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   // Redirect if not logged in as agent
@@ -48,21 +46,6 @@ export default function AgentDashboard() {
   // Get property info
   const getProperty = (id: string) => properties.find(p => p.id === id);
   const getCustomer = (id: string) => users.find(u => u.id === id);
-
-  // Group availability by date
-  const groupedAvailability: Record<string, AgentAvailability[]> = {};
-  agent.availability.forEach(slot => {
-    if (!groupedAvailability[slot.date]) {
-      groupedAvailability[slot.date] = [];
-    }
-    groupedAvailability[slot.date].push(slot);
-  });
-
-  const dates = Object.keys(groupedAvailability).sort().slice(0, 21); // Show 3 weeks
-
-  const toggleSlotAvailability = (slotId: string, isBooked: boolean) => {
-    updateAgentAvailability(agent.id, slotId, !isBooked);
-  };
 
   const handleSmsVerify = () => {
     // DEMO: In a production app, this would trigger an SMS verification flow
@@ -246,113 +229,22 @@ export default function AgentDashboard() {
               </div>
             </div>
 
-            {/* Enhanced Calendar / Availability */}
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">My Availability</h2>
-                <p className="text-sm text-gray-500 mt-1">Click a slot to toggle availability. Changes are instantly reflected for customers.</p>
-              </div>
-              <div className="p-6">
-                {/* Date tabs - Enhanced with larger touch targets */}
-                <div className="grid grid-cols-7 gap-2 mb-6">
-                  {dates.map(date => {
-                    const d = new Date(date);
-                    const isSelected = selectedDate === date;
-                    const daySlots = groupedAvailability[date] || [];
-                    const hasBooking = daySlots.some(s => s.isBooked && s.bookingId);
-                    const hasAppointmentOnDay = appointments.some(
-                      a => a.agentId === agent.id && a.date === date && 
-                           (a.status === 'scheduled' || a.status === 'accepted' || a.status === 'pending')
-                    );
-                    
-                    return (
-                      <button
-                        key={date}
-                        onClick={() => setSelectedDate(date)}
-                        className={`p-3 rounded-lg text-center transition-all transform hover:scale-105 ${
-                          isSelected
-                            ? 'bg-blue-600 text-white shadow-lg'
-                            : hasAppointmentOnDay
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200 border-2 border-green-300'
-                            : hasBooking
-                            ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        <p className="text-xs font-medium">
-                          {d.toLocaleDateString('en-US', { weekday: 'short' })}
-                        </p>
-                        <p className="text-2xl font-bold">{d.getDate()}</p>
-                        <p className="text-xs">
-                          {d.toLocaleDateString('en-US', { month: 'short' })}
-                        </p>
-                        {hasAppointmentOnDay && (
-                          <span className="inline-block w-2 h-2 bg-green-500 rounded-full mt-1"></span>
-                        )}
-                      </button>
-                    );
-                  })}
+            {/* Quick Link to Calendar */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">My Availability</h2>
+                  <p className="text-sm text-gray-500 mt-1">Manage your schedule and time slots</p>
                 </div>
-
-                {/* Time slots - Enhanced with larger buttons */}
-                {selectedDate ? (
-                  <div>
-                    <h3 className="font-medium mb-4 text-lg">{formatDate(selectedDate)}</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {(groupedAvailability[selectedDate] || []).map(slot => {
-                        const hasAppointment = appointments.some(
-                          a => a.agentId === agent.id && a.date === slot.date && 
-                               a.startTime === slot.startTime && 
-                               (a.status === 'scheduled' || a.status === 'accepted' || a.status === 'pending')
-                        );
-                        const appointmentForSlot = appointments.find(
-                          a => a.agentId === agent.id && a.date === slot.date && 
-                               a.startTime === slot.startTime && 
-                               (a.status === 'scheduled' || a.status === 'accepted' || a.status === 'pending')
-                        );
-                        
-                        return (
-                          <button
-                            key={slot.id}
-                            onClick={() => {
-                              if (appointmentForSlot) {
-                                setSelectedAppointment(appointmentForSlot);
-                              } else {
-                                toggleSlotAvailability(slot.id, slot.isBooked);
-                              }
-                            }}
-                            className={`p-4 rounded-lg text-sm transition-all transform hover:scale-105 ${
-                              hasAppointment
-                                ? 'bg-green-100 text-green-800 border-2 border-green-300 hover:bg-green-200'
-                                : slot.isBooked
-                                ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                                : 'bg-green-50 text-green-800 border-2 border-green-200 hover:bg-green-100'
-                            }`}
-                          >
-                            <p className="font-bold text-base">{formatTimeRange(slot.startTime, slot.endTime)}</p>
-                            <p className="text-xs mt-2 font-medium">
-                              {hasAppointment ? '📅 Appointment' : slot.isBooked ? '🚫 Blocked' : '✓ Available'}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-gray-600">
-                        <span className="inline-block w-3 h-3 bg-green-200 border border-green-300 rounded mr-2"></span>Available for booking
-                        <span className="inline-block w-3 h-3 bg-gray-200 rounded ml-4 mr-2"></span>Blocked
-                        <span className="inline-block w-3 h-3 bg-green-100 border-2 border-green-300 rounded ml-4 mr-2"></span>Has appointment
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 bg-gray-50 rounded-lg">
-                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-gray-500">Select a date above to view and manage time slots</p>
-                  </div>
-                )}
+                <Link
+                  to="/agent/calendar"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Open Calendar
+                </Link>
               </div>
             </div>
           </div>

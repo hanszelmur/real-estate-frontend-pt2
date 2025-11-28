@@ -8,6 +8,7 @@ export interface User {
   email: string;
   role: UserRole;
   phone?: string;
+  profilePicUrl?: string; // Profile picture URL
   smsVerified?: boolean; // SMS verification status for messaging
   // Customer-specific: blacklisted agent IDs (agents they don't want assigned)
   blacklistedAgentIds?: string[];
@@ -41,6 +42,7 @@ export interface Agent extends User {
   isOnVacation: boolean;
   availability: AgentAvailability[];
   latestRatings: AgentRating[];
+  profilePicUrl?: string; // Profile picture URL
   smsVerified?: boolean; // SMS verification status for messaging
 }
 

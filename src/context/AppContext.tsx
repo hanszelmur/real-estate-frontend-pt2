@@ -29,6 +29,8 @@ interface AppContextType {
   users: User[];
   getUser: (id: string) => User | undefined;
   updateUserSmsVerification: (userId: string, verified: boolean) => void;
+  updateUserProfile: (userId: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone' | 'profilePicUrl'>>) => void;
+  updateAgentProfile: (agentId: string, updates: Partial<Pick<Agent, 'name' | 'email' | 'phone' | 'profilePicUrl'>>) => void;
 
   // Appointments
   appointments: Appointment[];
@@ -195,6 +197,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUsers(prev => prev.map(u => 
       u.id === userId ? { ...u, smsVerified: verified } : u
     ));
+    // Update currentUser if it's the same user
+    setCurrentUser(prev => prev && prev.id === userId ? { ...prev, smsVerified: verified } : prev);
+  }, []);
+
+  const updateUserProfile = useCallback((userId: string, updates: Partial<Pick<User, 'name' | 'email' | 'phone' | 'profilePicUrl'>>) => {
+    setUsers(prev => prev.map(u => 
+      u.id === userId ? { ...u, ...updates } : u
+    ));
+    // Update currentUser if it's the same user
+    setCurrentUser(prev => prev && prev.id === userId && prev.role === 'customer' ? { ...prev, ...updates } : prev);
+  }, []);
+
+  const updateAgentProfile = useCallback((agentId: string, updates: Partial<Pick<Agent, 'name' | 'email' | 'phone' | 'profilePicUrl'>>) => {
+    setAgents(prev => prev.map(a => 
+      a.id === agentId ? { ...a, ...updates } : a
+    ));
+    // Update currentUser if it's the same agent
+    setCurrentUser(prev => prev && prev.id === agentId && prev.role === 'agent' ? { ...prev, ...updates } : prev);
   }, []);
 
   // Notification functions (defined early because used by appointment functions)
@@ -669,6 +689,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     users,
     getUser,
     updateUserSmsVerification,
+    updateUserProfile,
+    updateAgentProfile,
     appointments,
     getAppointmentsByUser,
     getAppointmentsByProperty,
