@@ -5,6 +5,7 @@ import type { Agent, Appointment } from '../../types';
 import { formatDate, formatTimeRange, formatRelativeTime, generateStars, formatCurrency } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
+import AddPropertyModal from '../../components/common/AddPropertyModal';
 
 type DashboardTab = 'appointments' | 'sold';
 
@@ -25,6 +26,7 @@ export default function AgentDashboard() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>('appointments');
   const [showQueueForProperty, setShowQueueForProperty] = useState<string | null>(null);
+  const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
 
   // Redirect if not logged in as agent
   if (!currentUser || currentUser.role !== 'agent') {
@@ -86,26 +88,39 @@ export default function AgentDashboard() {
             <p className="text-gray-600 mt-1">Welcome back, {agent.name}</p>
           </div>
           
-          {/* Vacation Toggle */}
-          <div className="flex items-center space-x-3">
-            <span className="text-sm text-gray-600">Vacation Mode</span>
+          <div className="flex items-center space-x-4">
+            {/* Add Property Button */}
             <button
-              onClick={() => toggleAgentVacation(agent.id)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                agent.isOnVacation ? 'bg-yellow-500' : 'bg-gray-200'
-              }`}
+              onClick={() => setShowAddPropertyModal(true)}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors"
             >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  agent.isOnVacation ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Property
             </button>
-            {agent.isOnVacation && (
-              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                On Vacation
-              </span>
-            )}
+            
+            {/* Vacation Toggle */}
+            <div className="flex items-center space-x-3">
+              <span className="text-sm text-gray-600">Vacation Mode</span>
+              <button
+                onClick={() => toggleAgentVacation(agent.id)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  agent.isOnVacation ? 'bg-yellow-500' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    agent.isOnVacation ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              {agent.isOnVacation && (
+                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                  On Vacation
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -534,6 +549,13 @@ export default function AgentDashboard() {
           customer={getCustomer(selectedAppointment.customerId)}
           onClose={() => setSelectedAppointment(null)}
           mode="agent"
+        />
+      )}
+
+      {/* Add Property Modal */}
+      {showAddPropertyModal && (
+        <AddPropertyModal
+          onClose={() => setShowAddPropertyModal(false)}
         />
       )}
     </div>

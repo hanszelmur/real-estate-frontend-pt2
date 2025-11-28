@@ -1,15 +1,20 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import PropertyCard from '../components/common/PropertyCard';
+import AddPropertyModal from '../components/common/AddPropertyModal';
 
 export default function PropertiesPage() {
   const { properties, currentUser } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priceRange, setPriceRange] = useState<string>('all');
   const [bedroomFilter, setBedroomFilter] = useState<string>('all');
+  const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
 
   // Check if user is customer (or not logged in - public view)
   const isCustomerView = !currentUser || currentUser.role === 'customer';
+  
+  // Check if user can add properties (agents and admins only)
+  const canAddProperty = currentUser && (currentUser.role === 'agent' || currentUser.role === 'admin');
 
   // Filter properties - hide sold properties from customer view
   const filteredProperties = properties.filter(property => {
@@ -44,10 +49,25 @@ export default function PropertiesPage() {
       {/* Header */}
       <section className="bg-blue-800 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold mb-2">Our Properties</h1>
-          <p className="text-blue-200">
-            Discover your perfect property in Davao City and surrounding areas
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Our Properties</h1>
+              <p className="text-blue-200">
+                Discover your perfect property in Davao City and surrounding areas
+              </p>
+            </div>
+            {canAddProperty && (
+              <button
+                onClick={() => setShowAddPropertyModal(true)}
+                className="flex items-center px-4 py-2 bg-white text-blue-800 rounded-md hover:bg-blue-50 font-medium transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Property
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -146,6 +166,13 @@ export default function PropertiesPage() {
           )}
         </div>
       </section>
+
+      {/* Add Property Modal */}
+      {showAddPropertyModal && (
+        <AddPropertyModal
+          onClose={() => setShowAddPropertyModal(false)}
+        />
+      )}
     </div>
   );
 }
