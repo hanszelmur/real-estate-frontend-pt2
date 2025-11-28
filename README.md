@@ -279,6 +279,8 @@ After a COMPLETED appointment ends:
    - Unverified users see "Send Verification Code" button
    - Demo: Any 6-digit code verifies the phone
 
+> **Note**: This demo app uses role-based login without passwords. Password change functionality is not currently implemented. See [Planned Enhancements](#planned-enhancements) for future authentication features.
+
 ### What Blocks Users from Acting
 | Blocker | Effect |
 |---------|--------|
@@ -372,11 +374,12 @@ addNotification({
 ## 🔮 Future Extension / Maintenance
 
 ### Planned Enhancements
-1. **Real SMS Integration**: Replace demo verification with actual SMS provider (Twilio, etc.)
-2. **Backend API**: Connect to real backend instead of mock data
-3. **Profile Pictures**: Enable URL-based profile picture uploads
-4. **Agent Ratings**: Allow customers to rate agents after viewings
-5. **Email Notifications**: Add email alongside in-app notifications
+1. **Real Authentication & Password Management**: Add proper login with password, password change, and password reset functionality (currently demo uses role-based login without passwords)
+2. **Real SMS Integration**: Replace demo verification with actual SMS provider (Twilio, etc.)
+3. **Backend API**: Connect to real backend instead of mock data
+4. **Profile Pictures**: Enable URL-based profile picture uploads
+5. **Agent Ratings**: Allow customers to rate agents after viewings
+6. **Email Notifications**: Add email alongside in-app notifications
 
 ### Maintenance Notes
 - Mock data in `src/data/mockData.ts` - replace with API calls
