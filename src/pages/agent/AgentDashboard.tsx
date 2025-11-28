@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import type { Agent, Appointment } from '../../types';
-import { formatDate, formatTimeRange, generateStars } from '../../utils/helpers';
+import { formatDate, formatTimeRange, formatRelativeTime, generateStars, formatCurrency } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 
@@ -16,9 +16,12 @@ export default function AgentDashboard() {
     updateAgentSmsVerification,
     getNotificationsByUser,
     markNotificationRead,
+    getPurchasePriorityQueue,
+    getSoldProperties,
   } = useApp();
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [showQueueForProperty, setShowQueueForProperty] = useState<string | null>(null);
 
   // Redirect if not logged in as agent
   if (!currentUser || currentUser.role !== 'agent') {
@@ -42,6 +45,12 @@ export default function AgentDashboard() {
   // Separate pending and accepted/scheduled appointments
   const pendingAppointments = agentAppointments.filter(a => a.status === 'pending');
   const confirmedAppointments = agentAppointments.filter(a => a.status === 'accepted' || a.status === 'scheduled');
+  
+  // Get unique properties with active appointments
+  const propertiesWithQueue = [...new Set(appointments
+    .filter(a => !['cancelled', 'rejected'].includes(a.status) && a.agentId === agent.id)
+    .map(a => a.propertyId)
+  )];
   
   // Get property info
   const getProperty = (id: string) => properties.find(p => p.id === id);
@@ -247,6 +256,95 @@ export default function AgentDashboard() {
                 </Link>
               </div>
             </div>
+
+            {/* Purchase Priority Queue */}
+            {propertiesWithQueue.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Purchase Priority Queue</h2>
+                  <p className="text-sm text-gray-500 mt-1">View customer priority order by property</p>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4">
+                    {propertiesWithQueue.map(propertyId => {
+                      const property = getProperty(propertyId);
+                      const queue = getPurchasePriorityQueue(propertyId);
+                      const isExpanded = showQueueForProperty === propertyId;
+                      
+                      return (
+                        <div key={propertyId} className="border rounded-lg">
+                          <button
+                            onClick={() => setShowQueueForProperty(isExpanded ? null : propertyId)}
+                            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 rounded-lg"
+                          >
+                            <div className="text-left">
+                              <h4 className="font-medium">{property?.title || 'Unknown Property'}</h4>
+                              <p className="text-sm text-gray-500">{queue.length} customer{queue.length !== 1 ? 's' : ''} in queue</p>
+                            </div>
+                            <svg 
+                              className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          
+                          {isExpanded && queue.length > 0 && (
+                            <div className="px-4 pb-4">
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left text-gray-600">#</th>
+                                    <th className="px-3 py-2 text-left text-gray-600">Customer</th>
+                                    <th className="px-3 py-2 text-left text-gray-600">Booked</th>
+                                    <th className="px-3 py-2 text-left text-gray-600">Viewing</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {queue.map((appt, index) => {
+                                    const customer = getCustomer(appt.customerId);
+                                    return (
+                                      <tr 
+                                        key={appt.id} 
+                                        className={`border-t ${index === 0 ? 'bg-green-50' : ''}`}
+                                      >
+                                        <td className="px-3 py-2">
+                                          {index === 0 ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                              1st
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-600">{index + 1}</span>
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-2 font-medium">
+                                          {customer?.name || appt.customerName || 'Unknown'}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-500">
+                                          {formatRelativeTime(appt.createdAt)}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-500">
+                                          {formatDate(appt.date)}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                              <p className="mt-3 text-xs text-gray-500">
+                                Priority is determined by booking timestamp (earliest first).
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -263,12 +361,23 @@ export default function AgentDashboard() {
 
                 {agent.soldProperties.length > 0 && (
                   <div>
-                    <p className="text-sm text-gray-500 mb-2">Recent Sales</p>
-                    <ul className="text-sm space-y-1">
-                      {agent.soldProperties.slice(0, 3).map((propId, index) => (
-                        <li key={index} className="text-gray-700">• Property #{propId}</li>
-                      ))}
-                    </ul>
+                    <p className="text-sm text-gray-500 mb-2">My Sold Properties</p>
+                    <div className="space-y-2">
+                      {getSoldProperties()
+                        .filter(p => p.soldByAgentId === agent.id)
+                        .slice(0, 3)
+                        .map((prop) => (
+                          <div key={prop.id} className="p-2 bg-gray-50 rounded-lg text-sm">
+                            <p className="font-medium">{prop.title}</p>
+                            <div className="flex justify-between items-center mt-1">
+                              <span className="text-green-600">{prop.salePrice ? formatCurrency(prop.salePrice) : formatCurrency(prop.price)}</span>
+                              {prop.soldDate && (
+                                <span className="text-xs text-gray-400">{formatDate(prop.soldDate)}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
               </div>
