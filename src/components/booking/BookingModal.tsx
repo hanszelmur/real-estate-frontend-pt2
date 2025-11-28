@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Property, Agent, AgentAvailability } from '../../types';
-import { useApp } from '../../context/AppContext';
+import { useApp, BOOKING_WINDOW_DAYS } from '../../context/AppContext';
 import { formatDate, formatTimeRange, randomSelect } from '../../utils/helpers';
 import AgentCard from '../common/AgentCard';
 
@@ -13,7 +13,7 @@ interface BookingModalProps {
 type BookingStep = 'agent' | 'time' | 'confirm';
 
 export default function BookingModal({ property, onClose, onSuccess }: BookingModalProps) {
-  const { currentUser, getAvailableAgents, createAppointment, hasAgentConflict, users, updateAgentAvailability, addNotification } = useApp();
+  const { currentUser, getAvailableAgents, createAppointment, hasAgentConflict, users, updateAgentAvailability, addNotification, isDateWithinBookingWindow, getCustomerPriorityPosition } = useApp();
   const [step, setStep] = useState<BookingStep>('agent');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AgentAvailability | null>(null);
@@ -22,7 +22,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
   const availableAgents = getAvailableAgents();
 
-  // Get available time slots for selected agent (with double-booking prevention)
+  // Get available time slots for selected agent (with double-booking prevention and 7-day window)
   const getAvailableSlots = (agent: Agent): AgentAvailability[] => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -32,10 +32,13 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
       if (slotDate < today) return false;
       if (slot.isBooked) return false;
       
+      // Enforce 7-day rolling window
+      if (!isDateWithinBookingWindow(slot.date)) return false;
+      
       // Check for double-booking - ensure agent doesn't have conflicting appointments
       const hasConflict = hasAgentConflict(agent.id, slot.date, slot.startTime, slot.endTime);
       return !hasConflict;
-    }).slice(0, 24); // Show next 4 days of slots
+    });
   };
 
   // Group slots by date
@@ -221,9 +224,16 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     return (
       <div>
         <h3 className="text-lg font-semibold mb-2">Select a Time</h3>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-gray-500 mb-2">
           Available times with {selectedAgent.name}
         </p>
+        
+        {/* 7-Day Window Notice */}
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-700">
+            <strong>Booking Window:</strong> Appointments can only be scheduled within the next {BOOKING_WINDOW_DAYS} days.
+          </p>
+        </div>
 
         {bookingError && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -233,7 +243,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
         {Object.keys(groupedSlots).length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p>No available slots for this agent.</p>
+            <p>No available slots for this agent within the {BOOKING_WINDOW_DAYS}-day window.</p>
             <p className="text-sm mt-1">All slots may be booked or blocked.</p>
             <button
               onClick={() => setStep('agent')}
@@ -293,6 +303,29 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
 
     // Check if customer will have purchase rights
     const willHavePurchaseRights = !property.firstViewerCustomerId || property.firstViewerCustomerId === currentUser?.id;
+    
+    // Get current priority position (0 means they'll be first, otherwise their position in queue)
+    const currentPosition = currentUser ? getCustomerPriorityPosition(property.id, currentUser.id) : 0;
+    const queuePosition = currentPosition > 0 ? currentPosition : 1; // Will be 1 if not in queue (will be first)
+    
+    // Professional priority text
+    const getPriorityText = () => {
+      if (willHavePurchaseRights) {
+        return 'You will hold the first right to purchase this property.';
+      } else if (queuePosition === 2) {
+        return 'You will be second in line for purchase rights.';
+      } else if (queuePosition === 3) {
+        return 'You will be third in line for purchase rights.';
+      } else {
+        return `You will be ${queuePosition}${getOrdinalSuffix(queuePosition)} in line for purchase rights.`;
+      }
+    };
+    
+    const getOrdinalSuffix = (n: number) => {
+      const s = ['th', 'st', 'nd', 'rd'];
+      const v = n % 100;
+      return s[(v - 20) % 10] || s[v] || s[0];
+    };
 
     return (
       <div>
@@ -304,21 +337,31 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
           </div>
         )}
 
-        {!willHavePurchaseRights && (
-          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <p className="text-sm text-yellow-800 font-medium">Viewing Only</p>
-                <p className="text-sm text-yellow-700 mt-1">
-                  Another customer has priority purchase rights for this property. You may view but cannot purchase unless they decline.
+        {/* Priority Information */}
+        <div className={`mb-4 p-4 rounded-lg ${willHavePurchaseRights ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+          <div className="flex items-start">
+            <svg className={`w-5 h-5 mt-0.5 mr-2 ${willHavePurchaseRights ? 'text-green-600' : 'text-yellow-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {willHavePurchaseRights ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              )}
+            </svg>
+            <div>
+              <p className={`text-sm font-medium ${willHavePurchaseRights ? 'text-green-800' : 'text-yellow-800'}`}>
+                {willHavePurchaseRights ? 'Priority Purchase Rights' : 'Queue Position'}
+              </p>
+              <p className={`text-sm mt-1 ${willHavePurchaseRights ? 'text-green-700' : 'text-yellow-700'}`}>
+                {getPriorityText()}
+              </p>
+              {!willHavePurchaseRights && (
+                <p className="text-xs text-yellow-600 mt-2">
+                  Priority is determined by booking timestamp, not viewing date. If customers ahead of you cancel or decline, you will be promoted.
                 </p>
-              </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
 
         <div className="space-y-3 bg-gray-50 rounded-lg p-4">
           <div>
@@ -330,7 +373,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
             <p className="font-medium">{selectedAgent.name}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-500">Date & Time</p>
+            <p className="text-sm text-gray-500">Viewing Date & Time</p>
             <p className="font-medium">
               {formatDate(selectedSlot.date)} at {formatTimeRange(selectedSlot.startTime, selectedSlot.endTime)}
             </p>
@@ -340,7 +383,7 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-700">
             <strong>Note:</strong> Your booking will be submitted as pending. The agent will confirm your appointment shortly.
-            You can change your agent at any time from your dashboard.
+            You can cancel at any time from your dashboard, which will release your priority position.
           </p>
         </div>
 

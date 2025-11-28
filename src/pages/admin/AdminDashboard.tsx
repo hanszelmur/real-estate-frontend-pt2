@@ -20,6 +20,7 @@ export default function AdminDashboard() {
     hasAgentConflict,
     createOverride,
     getSoldProperties,
+    getPurchasePriorityQueue,
   } = useApp();
 
   const [selectedAppointmentForOverride, setSelectedAppointmentForOverride] = useState<string | null>(null);
@@ -508,6 +509,78 @@ export default function AdminDashboard() {
                 ))}
               </div>
             </div>
+
+            {/* Sold Properties */}
+            {getSoldProperties().length > 0 && (
+              <div className="bg-white rounded-lg shadow-md">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">Sold Properties</h2>
+                </div>
+                <div className="p-4 space-y-3">
+                  {getSoldProperties().map(property => {
+                    const soldByAgent = agents.find(a => a.id === property.soldByAgentId);
+                    return (
+                      <div key={property.id} className="p-3 bg-gray-50 rounded-lg">
+                        <p className="font-medium text-sm">{property.title}</p>
+                        <p className="text-xs text-gray-500">{property.address}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-sm text-green-600 font-medium">
+                            {property.salePrice ? formatCurrency(property.salePrice) : formatCurrency(property.price)}
+                          </span>
+                          {soldByAgent && (
+                            <span className="text-xs text-gray-500">
+                              Sold by {soldByAgent.name}
+                            </span>
+                          )}
+                        </div>
+                        {property.soldDate && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {formatDate(property.soldDate)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Property Purchase Queues */}
+            {properties.filter(p => p.status === 'pending').length > 0 && (
+              <div className="bg-white rounded-lg shadow-md">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">Purchase Queues</h2>
+                </div>
+                <div className="p-4 space-y-3">
+                  {properties.filter(p => p.status === 'pending').map(property => {
+                    const queue = getPurchasePriorityQueue(property.id);
+                    return (
+                      <div key={property.id} className="p-3 bg-blue-50 rounded-lg">
+                        <p className="font-medium text-sm">{property.title}</p>
+                        <p className="text-xs text-gray-500">{queue.length} customer{queue.length !== 1 ? 's' : ''} in queue</p>
+                        {queue.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {queue.slice(0, 3).map((appt, idx) => {
+                              const customer = getCustomer(appt.customerId);
+                              return (
+                                <div key={appt.id} className="flex items-center text-xs">
+                                  <span className={`w-4 h-4 rounded-full mr-2 flex items-center justify-center text-white ${
+                                    idx === 0 ? 'bg-green-500' : 'bg-gray-400'
+                                  }`}>
+                                    {idx + 1}
+                                  </span>
+                                  <span>{customer?.name || 'Unknown'}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         )}

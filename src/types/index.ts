@@ -31,6 +31,12 @@ export interface Property {
   // Race logic: first customer to complete viewing has purchase rights
   firstViewerCustomerId?: string;
   firstViewerTimestamp?: string;
+  // Sold property tracking
+  salePrice?: number; // Final sale price (for reference only)
+  soldDate?: string; // ISO date when property was sold
+  soldByAgentId?: string; // Agent who sold the property
+  // Agent assignment for property management
+  assignedAgentId?: string; // Primary agent assigned to this property
 }
 
 // Agent interface (extends User with agent-specific fields)
@@ -118,6 +124,7 @@ export interface Notification {
   id: string;
   userId: string;
   type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'viewing_done' | 'property_sold' | 'property_available' | 'viewing_queued';
+  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'priority_promoted' | 'appointment_cancelled';
   title: string;
   message: string;
   read: boolean;

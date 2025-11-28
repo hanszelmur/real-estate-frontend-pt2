@@ -24,17 +24,23 @@ export default function CustomerAppointmentModal({
     canMessage,
     getMessagesByAppointment,
     sendMessage,
+    cancelAppointment,
+    getCustomerPriorityPosition,
   } = useApp();
 
   const [showSelectAgent, setShowSelectAgent] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [showMessaging, setShowMessaging] = useState(false);
   const [newMessage, setNewMessage] = useState('');
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const messages = getMessagesByAppointment(appointment.id);
   const messagingEnabled = canMessage(appointment.id);
   const agentSmsVerified = agent?.smsVerified ?? false;
   const customerSmsVerified = currentUser?.smsVerified ?? false;
+  
+  // Get customer's position in purchase priority queue
+  const priorityPosition = currentUser ? getCustomerPriorityPosition(appointment.propertyId, currentUser.id) : 0;
 
   // Get available agents for selection (excluding current and blacklisted)
   const excludeAgentIds = [
@@ -68,6 +74,26 @@ export default function CustomerAppointmentModal({
       sendMessage(appointment.id, newMessage);
       setNewMessage('');
     }
+  };
+
+  const handleCancelAppointment = () => {
+    cancelAppointment(appointment.id);
+    onClose();
+  };
+
+  // Get priority status text
+  const getPriorityStatusText = () => {
+    if (priorityPosition === 1) {
+      return 'You currently hold the first right to purchase this property.';
+    } else if (priorityPosition === 2) {
+      return 'You are second in line for purchase rights.';
+    } else if (priorityPosition === 3) {
+      return 'You are third in line for purchase rights.';
+    } else if (priorityPosition > 0) {
+      const suffix = ['th', 'st', 'nd', 'rd'][priorityPosition % 10 > 3 ? 0 : priorityPosition % 10] || 'th';
+      return `You are ${priorityPosition}${suffix} in line for purchase rights.`;
+    }
+    return '';
   };
 
   const getStatusBadgeColor = (status: string) => {
@@ -359,11 +385,65 @@ export default function CustomerAppointmentModal({
               </div>
             )}
 
-            {/* Race Logic Notice */}
-            {!appointment.hasPurchaseRights && appointment.status !== 'cancelled' && appointment.status !== 'rejected' && (
-              <div className="mb-6 p-3 bg-yellow-50 rounded-lg text-sm text-yellow-700">
-                <strong>Note:</strong> Another customer has priority purchase rights for this property. 
-                You may view but cannot purchase unless they decline.
+            {/* Purchase Priority Status */}
+            {priorityPosition > 0 && appointment.status !== 'cancelled' && appointment.status !== 'rejected' && (
+              <div className={`mb-6 p-4 rounded-lg ${priorityPosition === 1 ? 'bg-green-50 border border-green-200' : 'bg-blue-50 border border-blue-200'}`}>
+                <div className="flex items-center">
+                  <svg className={`w-5 h-5 mr-2 ${priorityPosition === 1 ? 'text-green-600' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {priorityPosition === 1 ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    )}
+                  </svg>
+                  <div>
+                    <p className={`text-sm font-medium ${priorityPosition === 1 ? 'text-green-800' : 'text-blue-800'}`}>
+                      Purchase Priority Status
+                    </p>
+                    <p className={`text-sm ${priorityPosition === 1 ? 'text-green-700' : 'text-blue-700'}`}>
+                      {getPriorityStatusText()}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Priority is based on booking timestamp (first come, first served).
+                </p>
+              </div>
+            )}
+
+            {/* Cancel Appointment Section */}
+            {!['cancelled', 'completed', 'rejected'].includes(appointment.status) && (
+              <div className="mb-6">
+                {showCancelConfirm ? (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <h4 className="font-medium text-red-800 mb-2">Cancel Appointment?</h4>
+                    <p className="text-sm text-red-700 mb-3">
+                      Are you sure you want to cancel this appointment? 
+                      {appointment.hasPurchaseRights && ' This will release your purchase priority position.'}
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setShowCancelConfirm(false)}
+                        className="flex-1 px-3 py-2 text-sm text-gray-600 bg-white border rounded-md hover:bg-gray-50"
+                      >
+                        Keep Appointment
+                      </button>
+                      <button
+                        onClick={handleCancelAppointment}
+                        className="flex-1 px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700"
+                      >
+                        Yes, Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="w-full px-4 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors"
+                  >
+                    Cancel Appointment
+                  </button>
+                )}
               </div>
             )}
           </div>
