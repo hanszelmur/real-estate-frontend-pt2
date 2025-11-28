@@ -1,5 +1,11 @@
 # TES Properties - Real Estate Frontend
 
+> ## ⚠️ MANDATORY README UPDATE POLICY
+> 
+> **After every UI, feature, or logic update, always update this README with the latest screenshots or images reflecting all current views, flows, and states. Outdated images must be removed or replaced. Annotate each screenshot clearly with its context (dashboard, calendar, booking, settings, etc). Any code contributor or AI must treat this as mandatory for every PR or merge.**
+
+---
+
 A comprehensive real estate frontend application for TES Properties, based in Davao City, Philippines. This application showcases property listings, booking flows, and role-based dashboards for customers, agents, and administrators.
 
 ## 🎯 System Refinement Release
@@ -14,22 +20,60 @@ This release establishes a **clean handoff state** with extensible foundation:
 
 ---
 
-## 📸 Screenshots
+## 📸 Screenshots & UI States
+
+All screenshots are current as of the latest release. Each image is annotated with its context.
 
 ### Home Page
-![Home Page](https://github.com/user-attachments/assets/9207c685-600c-4ba0-aad7-9968f932cf94)
+*Public landing page showing featured properties, company info, and call-to-action buttons.*
+
+![Home Page](https://github.com/user-attachments/assets/c380dc9a-80f3-418b-84e4-681bb1bb1607)
 
 ### Login Page (Role Selection)
-![Login Page](https://github.com/user-attachments/assets/57c82a8c-2b57-4548-96ea-db7b9a9799fd)
+*Demo login page allowing selection between Customer, Agent, and Admin roles. Each role has restricted access.*
+
+![Login Page](https://github.com/user-attachments/assets/79fff809-9a9a-45c4-a155-f6e643b145f6)
 
 ### Customer Dashboard (Clean State)
-![Customer Dashboard](https://github.com/user-attachments/assets/fe858aa8-0e9f-4cdd-8321-112e260ddbaf)
+*Customer's main dashboard showing appointment tabs (All, Accepted, Pending, Rejected), notifications, and quick actions. Clean state with no appointments.*
+
+![Customer Dashboard](https://github.com/user-attachments/assets/fa4c3516-063a-415f-87ab-de86dc7df818)
 
 ### Customer Settings Page
-![Customer Settings](https://github.com/user-attachments/assets/dc07dbaf-9957-4e0c-8159-fce6596c0d5a)
+*Customer profile settings with profile information fields and phone verification status. Shows verified state with green indicator.*
 
-### Agent Dashboard
-![Agent Dashboard](https://github.com/user-attachments/assets/390c7494-760d-4eda-8a6b-a774facdd41d)
+![Customer Settings](https://github.com/user-attachments/assets/5d337c52-8f6d-4e79-99f7-988c334793ab)
+
+---
+
+## 👥 User Roles and Permissions
+
+### Customer Role
+| Permission | Description |
+|------------|-------------|
+| Browse Properties | View all property listings with filters |
+| Book Viewings | Schedule property viewings with agents |
+| Manage Appointments | View, cancel, approve/reject agent reassignments |
+| Profile Settings | Update name, email, phone; verify phone via SMS |
+| Messaging | Chat with agents (requires SMS verification on both sides) |
+
+### Agent Role
+| Permission | Description |
+|------------|-------------|
+| View Assigned Bookings | See all appointments assigned to them |
+| Accept/Reject Bookings | Confirm or decline viewing requests |
+| Calendar Management | View full-month calendar, day view, manage availability |
+| Vacation Mode | Toggle availability for new bookings |
+| Profile Settings | Update profile info; verify phone via SMS |
+| Messaging | Chat with customers (requires SMS verification on both sides) |
+
+### Admin Role
+| Permission | Description |
+|------------|-------------|
+| View All Appointments | See all appointments across all agents |
+| Manual Override | Reassign agents to appointments with reason |
+| Resolve Alerts | Handle complaints, timeouts, and system alerts |
+| Agent Status View | See all agents' availability and verification status |
 
 ---
 
@@ -199,6 +243,149 @@ npm run lint     # Run linting
 - **Customer**: Browse properties and book viewings
 - **Agent**: Manage bookings and availability
 - **Admin**: Access via `/internal/admin/dashboard`
+
+---
+
+## 📅 Calendar Logic (Agent)
+
+### Full-Month View
+- Google Calendar-style monthly grid showing all days
+- Each day cell shows appointment previews (up to 3) with status colors
+- Click any day to switch to day view
+- Navigation: Previous/Next month, Today button
+
+### Day View
+- Hourly time slots from 8 AM to 6 PM
+- Shows appointments, blocked slots, and buffer periods
+- Color coding: Yellow (Pending), Green (Accepted), Blue (Scheduled), Gray (Completed)
+- Buffer periods shown in orange (2-hour rest after completed viewings)
+
+### Buffer Enforcement
+```
+After a COMPLETED appointment ends:
+  → Next 2 hours are automatically blocked
+  → Buffer slots shown in orange on calendar
+  → Agent cannot be booked during buffer period
+```
+
+---
+
+## 📱 Profile Flows & Verification
+
+### Settings Page (Customer & Agent)
+1. **Profile Information**: Name, Email, Phone (editable)
+2. **Phone Verification Section**:
+   - Shows current verification status (green = verified, yellow = not verified)
+   - Unverified users see "Send Verification Code" button
+   - Demo: Any 6-digit code verifies the phone
+
+> **Note**: This demo app uses role-based login without passwords. Password change functionality is not currently implemented. See [Planned Enhancements](#planned-enhancements) for future authentication features.
+
+### What Blocks Users from Acting
+| Blocker | Effect |
+|---------|--------|
+| Not logged in | Cannot book, access dashboards |
+| Not SMS verified | Cannot message (both parties need verification) |
+| Agent on vacation | Hidden from agent selection |
+| Blacklisted agent | Never assigned to that customer |
+
+### Phone Verification Storage
+- Stored in `User.smsVerified` and `Agent.smsVerified` fields
+- Updated via `updateUserSmsVerification()` or `updateAgentSmsVerification()`
+- Persisted in React context state (demo only - production needs backend)
+
+---
+
+## 📬 Automated Messaging & Notifications
+
+### One-Way Notifications (System → User)
+All notifications are **system-generated** and one-way. Users cannot reply to notifications.
+
+### Notification Types
+| Type | Recipient | Trigger |
+|------|-----------|---------|
+| `booking_new` | Agent | New booking assigned |
+| `booking_accepted` | Customer | Agent accepts booking |
+| `booking_rejected` | Customer | Agent rejects booking |
+| `agent_reassigned` | Customer | New agent auto-assigned after rejection |
+| `no_agents_available` | Customer | No agents available for slot |
+| `viewing_only` | Customer | Another customer has priority |
+
+### Messaging (Two-Way Chat)
+- **Requirements**: Both customer AND agent must be SMS verified
+- **Scope**: Only available for ACCEPTED or SCHEDULED appointments
+- **Location**: Chat drawer accessible from header
+- **Templates**: Distinct from notifications - conversational messages only
+
+### Centralized Notification Service
+All notifications flow through `addNotification()` in AppContext:
+```typescript
+addNotification({
+  userId: recipientId,
+  type: 'notification_type',
+  title: 'Title',
+  message: 'Message content',
+  read: false,
+  relatedId: appointmentOrPropertyId,
+});
+```
+
+---
+
+## ⚠️ Developer & AI Warnings
+
+### DRY Principle
+- **DO NOT** duplicate business logic - all core logic lives in `AppContext.tsx`
+- **DO NOT** create duplicate notification functions - use `addNotification()`
+- **DO NOT** duplicate status color mappings - reference existing `getStatusBadgeColor()` functions
+
+### Inheritance & Type Safety
+- All user types extend base `User` interface
+- `Agent` extends `User` with agent-specific fields
+- Always use TypeScript interfaces from `src/types/index.ts`
+
+### Mandatory README Updates
+> **Every PR must include README updates if it changes:**
+> - Any UI component or page
+> - Any user flow or state
+> - Any business logic
+> - Screenshots must be current - remove/replace outdated images
+
+---
+
+## 📝 Changelog / What's New
+
+### Current Release
+- ✅ Clean handoff state - no seeded appointments
+- ✅ Full-month agent calendar with day view
+- ✅ Profile/Settings pages for customers and agents
+- ✅ SMS verification flow (demo mode)
+- ✅ Fixed priority warning logic
+- ✅ Comprehensive README documentation
+
+### Previous Updates
+- Initial booking flow implementation
+- Race logic for property purchase rights
+- Agent assignment and reassignment
+- Notification system
+
+---
+
+## 🔮 Future Extension / Maintenance
+
+### Planned Enhancements
+1. **Real Authentication & Password Management**: Add proper login with password, password change, and password reset functionality (currently demo uses role-based login without passwords)
+2. **Real SMS Integration**: Replace demo verification with actual SMS provider (Twilio, etc.)
+3. **Backend API**: Connect to real backend instead of mock data
+4. **Profile Pictures**: Enable URL-based profile picture uploads
+5. **Agent Ratings**: Allow customers to rate agents after viewings
+6. **Email Notifications**: Add email alongside in-app notifications
+
+### Maintenance Notes
+- Mock data in `src/data/mockData.ts` - replace with API calls
+- All dates use ISO format strings
+- Times use HH:mm format
+- Currency formatted for Philippine Peso (₱)
 
 ---
 
