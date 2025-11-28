@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { formatDate, formatTimeRange, getInitials } from '../../utils/helpers';
+import { formatDate, formatTime, getInitials } from '../../utils/helpers';
 import CustomerAppointmentModal from '../../components/common/CustomerAppointmentModal';
 import type { Appointment } from '../../types';
 
@@ -219,7 +219,7 @@ export default function CustomerDashboard() {
                               <p className="font-medium">
                                 {formatDate(appointment.date)}
                                 <br />
-                                {formatTimeRange(appointment.startTime, appointment.endTime)}
+                                {formatTime(appointment.startTime)}
                               </p>
                             </div>
                             <div>

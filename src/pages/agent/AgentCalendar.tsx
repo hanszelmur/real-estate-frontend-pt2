@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp, AGENT_BUFFER_HOURS } from '../../context/AppContext';
 import type { Agent, Appointment, AgentUnavailablePeriod } from '../../types';
-import { formatTime, formatTimeRange } from '../../utils/helpers';
+import { formatTime } from '../../utils/helpers';
 import { 
   startOfMonth, 
   endOfMonth, 

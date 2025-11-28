@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { formatDate, formatTimeRange, formatRelativeTime, getInitials, formatCurrency } from '../../utils/helpers';
+import { formatDate, formatTime, formatRelativeTime, getInitials, formatCurrency } from '../../utils/helpers';
 import type { Appointment } from '../../types';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 
@@ -291,7 +291,7 @@ export default function AdminDashboard() {
                             <div>
                               <h4 className="font-medium">{property?.title}</h4>
                               <p className="text-sm text-gray-500">
-                                {formatDate(appointment.date)} at {formatTimeRange(appointment.startTime, appointment.endTime)}
+                                {formatDate(appointment.date)} at {formatTime(appointment.startTime)}
                               </p>
                               <p className="text-sm text-gray-600 mt-1">
                                 Customer: {customer?.name || appointment.customerName || 'Unknown'}

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Appointment, Agent, Property, User } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { formatDate, formatTimeRange, formatRelativeTime, getInitials } from '../../utils/helpers';
+import { formatDate, formatTime, formatRelativeTime, getInitials } from '../../utils/helpers';
 
 interface AppointmentDetailModalProps {
   appointment: Appointment;
@@ -190,7 +190,7 @@ export default function AppointmentDetailModal({
                 {formatDate(appointment.date)}
               </p>
               <p className="text-blue-800">
-                {formatTimeRange(appointment.startTime, appointment.endTime)}
+                {formatTime(appointment.startTime)}
               </p>
             </div>
 

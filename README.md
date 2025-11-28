@@ -12,6 +12,11 @@ A comprehensive real estate frontend application for TES Properties, based in Da
 
 This release includes major enhancements to booking, property, and purchase flows:
 
+- ✅ **Start-Time-Only Booking** - Customers select only a start time (no fixed end times). Agent controls when viewing ends.
+- ✅ **Agent Unavailability Management** - Agents can mark any period as unavailable (e.g., lunch break, personal events) via calendar
+- ✅ **Exclusive Property Viewings with Waitlist** - Properties can be set as exclusive (one customer per slot). If taken, customers join a visible waitlist with queue position display (e.g., "You are #2 in line")
+- ✅ **Group Viewing Support** - Non-exclusive properties allow multiple customers to book the same time slot
+- ✅ **Enhanced Customer Status Messaging** - Clear status display (confirmed, queued, promoted) throughout the booking interface
 - ✅ **7-Day Rolling Booking Window** - Strict limit on booking to next 7 days only
 - ✅ **Purchase Priority Queue** - Fair first-come, first-served purchase rights by booking timestamp
 - ✅ **Cancel Appointment Feature** - Customers can cancel with confirmation, instant priority release
@@ -217,13 +222,55 @@ FUNCTION isDateWithinBookingWindow(dateString):
 // Prevents bookings or purchase holds beyond this window
 ```
 
-### Booking Flow
+### Booking Flow (Start-Time-Only Selection)
 ```
-1. Customer selects property → Chooses agent (or auto-assign) → Selects time slot (within 7 days)
-2. Booking submitted as PENDING → Agent notified
-3. Agent ACCEPTS or REJECTS → Customer notified
-4. If rejected: System auto-assigns new available agent → Customer approves or selects different
-5. Agent conducts viewing → Marks as DONE (available) or SOLD (purchased)
+1. Customer selects property → Chooses agent (or auto-assign) → Selects START TIME only (no end time)
+2. For exclusive properties: If slot is taken, customer is added to waitlist with queue position
+3. For non-exclusive properties: Multiple customers can book same start time (group viewing)
+4. Booking submitted as PENDING (or QUEUED for waitlisted) → Agent notified
+5. Agent ACCEPTS or REJECTS → Customer notified
+6. If rejected: System auto-assigns new available agent → Customer approves or selects different
+7. Agent conducts viewing → Agent controls when viewing ends → Marks as DONE (available) or SOLD (purchased)
+
+NOTE: End times are NOT selected by customers. The agent determines when the viewing ends.
+```
+
+### Exclusive Property & Waitlist Logic
+```
+EXCLUSIVE PROPERTY RULES:
+1. Properties can be marked as "exclusive" (isExclusive = true)
+2. For exclusive properties, only ONE customer can hold a confirmed booking per start time
+3. If another customer tries to book an already-taken exclusive slot:
+   a. They are added to a visible waitlist (status = 'queued')
+   b. Their queue position is displayed (e.g., "You are #2 in line")
+   c. They receive notification of their waitlist position
+4. When the confirmed customer cancels:
+   a. Next in queue is automatically promoted
+   b. Promoted customer is notified
+
+NON-EXCLUSIVE (GROUP VIEWING) RULES:
+1. Multiple customers can book the same time slot
+2. Group size indicator shown (e.g., "Group (3)")
+3. All bookings are confirmed independently
+```
+
+### Agent Unavailability Management
+```
+UNAVAILABLE PERIOD RULES:
+1. Agents can mark any time period as unavailable via calendar
+2. Unavailable periods have: date, startTime, endTime, optional reason
+3. Examples: "Lunch break", "Personal event", "Training"
+4. Unavailable periods are excluded from customer booking selector
+5. Multiple unavailable periods can overlap
+
+FUNCTION isStartTimeAvailable(agentId, date, startTime):
+    // Check unavailable periods
+    FOR EACH period IN agent.unavailablePeriods:
+        IF period.date == date AND startTime >= period.startTime AND startTime < period.endTime:
+            RETURN false
+    
+    // Check existing bookings and vacation status
+    ... existing availability checks ...
 ```
 
 ### Purchase Priority Queue Logic
