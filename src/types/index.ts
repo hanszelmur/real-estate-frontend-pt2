@@ -122,6 +122,8 @@ export interface Appointment {
   rejectionReason?: string; // Reason for rejection
   // Waitlist/queue position for exclusive properties
   queuePosition?: number; // Position in waitlist (1 = confirmed, 2+ = queued)
+  // Rating tracking
+  hasRated?: boolean; // Whether the customer has rated this appointment
 }
 
 // Message for appointment-specific messaging

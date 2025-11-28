@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Appointment, Agent, Property } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { formatDate, formatTime, formatRelativeTime, getInitials } from '../../utils/helpers';
+import AgentRatingModal from './AgentRatingModal';
 
 interface CustomerAppointmentModalProps {
   appointment: Appointment;
@@ -26,6 +27,7 @@ export default function CustomerAppointmentModal({
     sendMessage,
     cancelAppointment,
     getCustomerPriorityPosition,
+    updateAppointment,
   } = useApp();
 
   const [showSelectAgent, setShowSelectAgent] = useState(false);
@@ -33,6 +35,7 @@ export default function CustomerAppointmentModal({
   const [showMessaging, setShowMessaging] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
 
   const messages = getMessagesByAppointment(appointment.id);
   const messagingEnabled = canMessage(appointment.id);
@@ -41,6 +44,9 @@ export default function CustomerAppointmentModal({
   
   // Get customer's position in purchase priority queue
   const priorityPosition = currentUser ? getCustomerPriorityPosition(appointment.propertyId, currentUser.id) : 0;
+  
+  // Check if appointment is completed and not yet rated
+  const canRate = (appointment.status === 'done' || appointment.status === 'completed') && !appointment.hasRated;
 
   // Get available agents for selection (excluding current and blacklisted)
   const excludeAgentIds = [
@@ -79,6 +85,12 @@ export default function CustomerAppointmentModal({
   const handleCancelAppointment = () => {
     cancelAppointment(appointment.id);
     onClose();
+  };
+
+  const handleRatingSuccess = () => {
+    // Mark appointment as rated
+    updateAppointment(appointment.id, { hasRated: true });
+    setShowRatingModal(false);
   };
 
   // Get priority status text
@@ -411,6 +423,40 @@ export default function CustomerAppointmentModal({
               </div>
             )}
 
+            {/* Rate Agent Section - for completed appointments */}
+            {canRate && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-yellow-800">Rate Your Experience</h4>
+                    <p className="text-sm text-yellow-700 mt-1">
+                      How was your viewing experience with {agent?.name}?
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowRatingModal(true)}
+                    className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-sm font-medium"
+                  >
+                    Rate Agent
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Already Rated Message */}
+            {appointment.hasRated && (appointment.status === 'done' || appointment.status === 'completed') && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-green-700">
+                    Thank you for rating your experience!
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Cancel Appointment Section */}
             {!['cancelled', 'completed', 'rejected'].includes(appointment.status) && (
               <div className="mb-6">
@@ -459,6 +505,15 @@ export default function CustomerAppointmentModal({
           </div>
         </div>
       </div>
+
+      {/* Agent Rating Modal */}
+      {showRatingModal && (
+        <AgentRatingModal
+          agent={agent}
+          onClose={() => setShowRatingModal(false)}
+          onSuccess={handleRatingSuccess}
+        />
+      )}
     </div>
   );
 }
