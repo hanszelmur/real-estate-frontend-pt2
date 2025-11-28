@@ -8,15 +8,17 @@
 
 A comprehensive real estate frontend application for TES Properties, based in Davao City, Philippines. This application showcases property listings, booking flows, and role-based dashboards for customers, agents, and administrators.
 
-## 🎯 System Refinement Release
+## 🎯 Latest System Enhancement Release
 
-This release establishes a **clean handoff state** with extensible foundation:
+This release includes major enhancements to booking, property, and purchase flows:
 
-- ✅ **No seeded appointments/bookings** - Clean base state for new deployments
-- ✅ **Full-month Agent Calendar** - Google Calendar style with day view
-- ✅ **Profile/Settings pages** - For both customers and agents with SMS verification
-- ✅ **Fixed priority warning logic** - Never shown to booking owner
-- ✅ **Clean dashboards** - No demo data cluttering the UI
+- ✅ **7-Day Rolling Booking Window** - Strict limit on booking to next 7 days only
+- ✅ **Purchase Priority Queue** - Fair first-come, first-served purchase rights by booking timestamp
+- ✅ **Cancel Appointment Feature** - Customers can cancel with confirmation, instant priority release
+- ✅ **Priority Status Display** - Professional queue position display for customers and agents
+- ✅ **Sold Properties Tracking** - Visible to agents and admins with sale price reference
+- ✅ **Enhanced Queue Tables** - Agent dashboard shows booking queue by property
+- ✅ **Global Agent Scheduling** - Double-booking prevention and buffer enforcement across all properties
 
 ---
 
@@ -34,15 +36,54 @@ All screenshots are current as of the latest release. Each image is annotated wi
 
 ![Login Page](https://github.com/user-attachments/assets/79fff809-9a9a-45c4-a155-f6e643b145f6)
 
-### Customer Dashboard (Clean State)
-*Customer's main dashboard showing appointment tabs (All, Accepted, Pending, Rejected), notifications, and quick actions. Clean state with no appointments.*
+### Customer Dashboard
+*Customer's main dashboard showing appointment tabs (All, Accepted, Pending, Rejected), priority status badges, notifications, and quick actions.*
+
+**Features shown:**
+- Priority position badges on each appointment (e.g., "1st in line", "2nd in line")
+- Status indicators for booking confirmation
+- Click to view details, cancel, or chat
 
 ![Customer Dashboard](https://github.com/user-attachments/assets/fa4c3516-063a-415f-87ab-de86dc7df818)
+
+### Customer Appointment Modal
+*Appointment detail view with cancel functionality and priority status.*
+
+**Features shown:**
+- Purchase priority status display
+- Cancel appointment button with confirmation
+- Agent contact and messaging options
+- Professional priority text (e.g., "You currently hold the first right to purchase")
+
+### Booking Modal - 7-Day Window
+*Booking flow showing 7-day rolling window restriction.*
+
+**Features shown:**
+- Notice about 7-day booking window limit
+- Available time slots within window only
+- Priority position preview before confirming
 
 ### Customer Settings Page
 *Customer profile settings with profile information fields and phone verification status. Shows verified state with green indicator.*
 
 ![Customer Settings](https://github.com/user-attachments/assets/5d337c52-8f6d-4e79-99f7-988c334793ab)
+
+### Agent Dashboard - Queue Table
+*Agent dashboard with purchase priority queue table by property.*
+
+**Features shown:**
+- Expandable queue tables showing customer order
+- Booking timestamp for each customer
+- Viewing date for each appointment
+- First position highlighted
+
+### Admin Dashboard - Sold Properties
+*Admin dashboard showing sold properties section and purchase queues.*
+
+**Features shown:**
+- Sold properties list with sale price
+- Agent who completed sale
+- Active purchase queues by property
 
 ---
 
@@ -52,7 +93,9 @@ All screenshots are current as of the latest release. Each image is annotated wi
 | Permission | Description |
 |------------|-------------|
 | Browse Properties | View all property listings with filters |
-| Book Viewings | Schedule property viewings with agents |
+| Book Viewings | Schedule property viewings within 7-day window |
+| View Priority Status | See purchase queue position on dashboard |
+| Cancel Appointments | Cancel with confirmation, releases priority position |
 | Manage Appointments | View, cancel, approve/reject agent reassignments |
 | Profile Settings | Update name, email, phone; verify phone via SMS |
 | Messaging | Chat with agents (requires SMS verification on both sides) |
@@ -61,8 +104,10 @@ All screenshots are current as of the latest release. Each image is annotated wi
 | Permission | Description |
 |------------|-------------|
 | View Assigned Bookings | See all appointments assigned to them |
+| View Purchase Queues | See priority queue for each property with bookings |
 | Accept/Reject Bookings | Confirm or decline viewing requests |
 | Calendar Management | View full-month calendar, day view, manage availability |
+| View Sold Properties | See properties they sold with sale prices |
 | Vacation Mode | Toggle availability for new bookings |
 | Profile Settings | Update profile info; verify phone via SMS |
 | Messaging | Chat with customers (requires SMS verification on both sides) |
@@ -71,6 +116,8 @@ All screenshots are current as of the latest release. Each image is annotated wi
 | Permission | Description |
 |------------|-------------|
 | View All Appointments | See all appointments across all agents |
+| View All Purchase Queues | See priority queues for all properties |
+| View Sold Properties | See all sold properties with sale prices |
 | Manual Override | Reassign agents to appointments with reason |
 | Resolve Alerts | Handle complaints, timeouts, and system alerts |
 | Agent Status View | See all agents' availability and verification status |
@@ -79,9 +126,52 @@ All screenshots are current as of the latest release. Each image is annotated wi
 
 ## 🔧 Core System Rules & Logic
 
+### 7-Day Rolling Booking Window
+```
+CONSTANT BOOKING_WINDOW_DAYS = 7
+
+FUNCTION isDateWithinBookingWindow(dateString):
+    today = getCurrentDate()
+    maxDate = today + BOOKING_WINDOW_DAYS
+    
+    RETURN date >= today AND date <= maxDate
+
+// Enforced in BookingModal when showing available time slots
+// Prevents bookings or purchase holds beyond this window
+```
+
+### Purchase Priority Queue Logic
+```
+PRIORITY RULES:
+1. Priority is determined by BOOKING TIMESTAMP (createdAt), NOT viewing date/time
+2. First customer to book gets purchase rights (position 1)
+3. Subsequent customers join the queue in booking order
+4. When a customer cancels, next in queue is automatically promoted
+5. Promoted customer receives notification of new priority status
+
+// Priority text displayed:
+- Position 1: "You currently hold the first right to purchase"
+- Position 2: "You are second in line"
+- Position 3: "You are third in line"
+- Position N: "You are Nth in line"
+```
+
+### Cancel Appointment Flow
+```
+WHEN customer cancels appointment:
+    1. Set appointment status to 'cancelled'
+    2. Notify assigned agent of cancellation
+    3. IF customer had purchase rights:
+        a. Find next customer in queue (by booking timestamp)
+        b. Grant them purchase rights
+        c. Notify them of promotion
+    4. IF no other customers in queue:
+        a. Reset property status to 'available'
+```
+
 ### Booking Flow
 ```
-1. Customer selects property → Chooses agent (or auto-assign) → Selects time slot
+1. Customer selects property → Chooses agent (or auto-assign) → Selects time slot (within 7 days)
 2. Booking submitted as PENDING → Agent notified
 3. Agent ACCEPTS or REJECTS → Customer notified
 4. If rejected: System auto-assigns new available agent → Customer approves or selects different
@@ -134,36 +224,62 @@ FUNCTION findAvailableAgent(customerId, date, startTime, endTime, excludeIds):
     RETURN availableAgents[0] OR null
 ```
 
-### Race Logic (Competing Property Interests)
+### Sold Property Management
 ```pseudocode
-ON createAppointment(propertyId, customerId):
-    existingViewers = appointments.filter(propertyId, status != 'cancelled')
+FUNCTION markPropertySold(propertyId, salePrice, agentId):
+    // Update property status
+    property.status = 'sold'
+    property.salePrice = salePrice
+    property.soldDate = now()
+    property.soldByAgentId = agentId
     
-    IF existingViewers.length == 0:
-        // First viewer gets purchase rights
-        appointment.hasPurchaseRights = true
-        property.status = 'pending'
-        property.firstViewerCustomerId = customerId
-    ELSE:
-        // Subsequent viewers - viewing only
-        appointment.hasPurchaseRights = false
-        notifyCustomer("Another customer has priority purchase rights")
+    // Update agent stats
+    agent.salesCount += 1
+    agent.soldProperties.push(propertyId)
+    
+    // Cancel all pending appointments for this property
+    FOR EACH appointment WHERE appointment.propertyId = propertyId:
+        IF appointment.status NOT IN ['completed', 'cancelled']:
+            appointment.status = 'cancelled'
 ```
 
 ---
 
 ## ⚠️ DO NOT BREAK - Business Rules
 
-1. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times
-2. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing
-3. **Race Logic**: First viewer ALWAYS gets purchase rights
-4. **SMS Verification**: BOTH parties must be verified for messaging to work
-5. **Priority Warning**: NEVER show "another customer has priority" to the firstViewerCustomerId
-6. **Blacklist Respect**: NEVER assign blacklisted agents to a customer
+1. **7-Day Booking Window**: NEVER allow bookings beyond 7 days from today
+2. **Double-booking Prevention**: NEVER allow two appointments with same agent at overlapping times (global across all properties)
+3. **Buffer Period**: Agent unavailable for 2 hours after completing a viewing
+4. **Purchase Priority**: Priority is ALWAYS by earliest booking timestamp, NOT viewing date
+5. **Priority Promotion**: When first-in-line cancels, ALWAYS promote next customer
+6. **SMS Verification**: BOTH parties must be verified for messaging to work
+7. **Priority Display**: Show priority position to ALL customers, not just first
+8. **Blacklist Respect**: NEVER assign blacklisted agents to a customer
+9. **Property Assignment**: Only assigned agent or admin can edit a property
+
+---
+
+## 📊 Sample Queue Display Table
+
+Example of the purchase priority queue shown to agents:
+
+| # | Customer | Booked | Viewing Date |
+|---|----------|--------|--------------|
+| **1st** | Juan Dela Cruz | 2 hours ago | Dec 15, 2024 |
+| 2 | Maria Garcia | 1 day ago | Dec 16, 2024 |
+| 3 | Jose Santos | 2 days ago | Dec 14, 2024 |
+
+*Note: Juan is first because he booked first (2 hours ago), even though Jose's viewing is earlier (Dec 14).*
 
 ---
 
 ## 🔌 How to Extend/Modify
+
+### Modifying Booking Window
+```typescript
+// In src/context/AppContext.tsx
+export const BOOKING_WINDOW_DAYS = 7;  // ← Modify this value
+```
 
 ### Adding New Appointment Status
 1. Add status to `Appointment['status']` union type in `src/types/index.ts`
@@ -355,7 +471,18 @@ addNotification({
 
 ## 📝 Changelog / What's New
 
-### Current Release
+### Latest Release - Appointment & Transaction Enhancements
+- ✅ **7-Day Rolling Booking Window** - Strict limit on property viewing and booking
+- ✅ **Purchase Priority Queue System** - Fair first-come, first-served by booking timestamp
+- ✅ **Cancel Appointment Feature** - Customer-initiated cancellation with confirmation
+- ✅ **Priority Promotion Logic** - Automatic promotion when first-in-line cancels
+- ✅ **Priority Status Display** - Professional queue position for customers and agents
+- ✅ **Agent Queue Tables** - Expandable property queues showing booking order
+- ✅ **Sold Properties Section** - Visible to agents and admins with sale price reference
+- ✅ **Admin Purchase Queues** - Overview of all property purchase queues
+- ✅ **Enhanced Notifications** - New types for cancellation and priority promotion
+
+### Previous Release
 - ✅ Clean handoff state - no seeded appointments
 - ✅ Full-month agent calendar with day view
 - ✅ Profile/Settings pages for customers and agents
@@ -363,7 +490,7 @@ addNotification({
 - ✅ Fixed priority warning logic
 - ✅ Comprehensive README documentation
 
-### Previous Updates
+### Initial Release
 - Initial booking flow implementation
 - Race logic for property purchase rights
 - Agent assignment and reassignment
@@ -380,12 +507,14 @@ addNotification({
 4. **Profile Pictures**: Enable URL-based profile picture uploads
 5. **Agent Ratings**: Allow customers to rate agents after viewings
 6. **Email Notifications**: Add email alongside in-app notifications
+7. **Property Add/Edit UI**: Full property management interface for agents and admins
 
 ### Maintenance Notes
 - Mock data in `src/data/mockData.ts` - replace with API calls
 - All dates use ISO format strings
 - Times use HH:mm format
 - Currency formatted for Philippine Peso (₱)
+- Booking window constant in `src/context/AppContext.tsx`
 
 ---
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import type { Agent, Appointment } from '../../types';
-import { formatDate, formatTimeRange, formatRelativeTime, generateStars } from '../../utils/helpers';
+import { formatDate, formatTimeRange, formatRelativeTime, generateStars, formatCurrency } from '../../utils/helpers';
 import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 
@@ -17,6 +17,7 @@ export default function AgentDashboard() {
     getNotificationsByUser,
     markNotificationRead,
     getPurchasePriorityQueue,
+    getSoldProperties,
   } = useApp();
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -360,12 +361,23 @@ export default function AgentDashboard() {
 
                 {agent.soldProperties.length > 0 && (
                   <div>
-                    <p className="text-sm text-gray-500 mb-2">Recent Sales</p>
-                    <ul className="text-sm space-y-1">
-                      {agent.soldProperties.slice(0, 3).map((propId, index) => (
-                        <li key={index} className="text-gray-700">• Property #{propId}</li>
-                      ))}
-                    </ul>
+                    <p className="text-sm text-gray-500 mb-2">My Sold Properties</p>
+                    <div className="space-y-2">
+                      {getSoldProperties()
+                        .filter(p => p.soldByAgentId === agent.id)
+                        .slice(0, 3)
+                        .map((prop) => (
+                          <div key={prop.id} className="p-2 bg-gray-50 rounded-lg text-sm">
+                            <p className="font-medium">{prop.title}</p>
+                            <div className="flex justify-between items-center mt-1">
+                              <span className="text-green-600">{prop.salePrice ? formatCurrency(prop.salePrice) : formatCurrency(prop.price)}</span>
+                              {prop.soldDate && (
+                                <span className="text-xs text-gray-400">{formatDate(prop.soldDate)}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
               </div>
