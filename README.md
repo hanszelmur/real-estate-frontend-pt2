@@ -12,11 +12,17 @@ A comprehensive real estate frontend application for TES Properties, based in Da
 
 This release includes major enhancements to booking, property, and purchase flows:
 
+- ✅ **Seconds-Precision Booking Records** - All bookings are recorded with millisecond timestamps for precise contention detection
+- ✅ **High Demand Slot Warnings** - UI highlights popular time slots with visual indicators (🔥 High demand) and animated badges
+- ✅ **Immediate Booking Status Feedback** - Customers instantly see confirmed/queued status after booking attempts
+- ✅ **Enhanced Queue Promotion** - After cancellation, next customer in queue is instantly promoted with clear notification (🎉)
+- ✅ **Real-Time Booking Status Display** - Customer dashboard shows all statuses (confirmed, queued, promoted, canceled) with visual distinction
+- ✅ **Recently Promoted Highlighting** - Promoted customers see a special banner on their appointment
+- ✅ **Agent Rating Duplicate Prevention** - Rate only once per completed appointment, enforced client-side and in business logic
 - ✅ **Start-Time-Only Booking** - Customers select only a start time (no fixed end times). Agent controls when viewing ends.
 - ✅ **Agent Unavailability Management** - Agents can mark any period as unavailable (e.g., lunch break, personal events) via calendar
 - ✅ **Exclusive Property Viewings with Waitlist** - Properties can be set as exclusive (one customer per slot). If taken, customers join a visible waitlist with queue position display (e.g., "You are #2 in line")
 - ✅ **Group Viewing Support** - Non-exclusive properties allow multiple customers to book the same time slot
-- ✅ **Enhanced Customer Status Messaging** - Clear status display (confirmed, queued, promoted) throughout the booking interface
 - ✅ **7-Day Rolling Booking Window** - Strict limit on booking to next 7 days only
 - ✅ **Purchase Priority Queue** - Fair first-come, first-served purchase rights by booking timestamp
 - ✅ **Cancel Appointment Feature** - Customers can cancel with confirmation, instant priority release
@@ -391,6 +397,89 @@ NON-EXCLUSIVE (GROUP VIEWING) RULES:
 3. All bookings are confirmed independently
 ```
 
+### Seconds-Precision Booking & Contention Detection
+```
+SECONDS-PRECISION BOOKING RULES:
+1. All booking attempts record millisecond-precision timestamps (bookingAttemptTimestamp)
+2. System detects high-demand slots by checking recent booking activity (last 30 seconds)
+3. UI displays high-demand indicators:
+   a. 🔥 High demand badge on time slots
+   b. Animated pulse indicator on contested slots
+   c. Warning message before confirmation
+
+HIGH-DEMAND DETECTION ALGORITHM:
+FUNCTION checkSecondsAvailability(agentId, date, startTime):
+    recentWindowMs = 30 * 1000  // 30 seconds
+    now = Date.now()
+    
+    existingAtTime = appointments.filter(
+        agentId == agentId AND date == date AND startTime == startTime
+        AND status NOT IN ['cancelled', 'rejected', 'done', 'sold', 'completed']
+    )
+    
+    recentAttempts = existingAtTime.filter(
+        (now - createdAt) < recentWindowMs
+    )
+    
+    contention = recentAttempts.length > 0
+    waitlistSize = existingAtTime.length
+    available = existingAtTime.length == 0
+    
+    RETURN { available, contention, waitlistSize }
+
+BOOKING ATTEMPT TRACKING:
+- bookingAttemptTimestamp: ISO timestamp of exact moment booking was attempted
+- wasHighDemandSlot: boolean flag if slot had contention at booking time
+- Used for analytics and customer transparency
+```
+
+### Queue Promotion with Instant Notification
+```
+QUEUE PROMOTION FLOW:
+1. Customer in position #1 cancels their booking
+2. System immediately identifies next customer in queue (by booking timestamp)
+3. Promoted customer's appointment is updated:
+   a. status: 'queued' → 'pending'
+   b. hasViewingRights: false → true
+   c. queuePosition: 2 → 1
+   d. promotedAt: current timestamp
+   e. promotedFromPosition: previous queue position
+4. Clear notification sent to promoted customer:
+   - Type: 'queue_promoted'
+   - Title: "🎉 You've Been Promoted!"
+   - Message includes previous position and new confirmed status
+5. Customer dashboard shows "Recently Promoted" banner on appointment
+6. Other queued customers have their positions updated automatically
+
+PROMOTION NOTIFICATION EXAMPLES:
+- "Great news! You are now confirmed for the 10:00 AM slot at Modern Villa. 
+   The customer ahead of you cancelled. Your booking is pending agent confirmation."
+- Previous position tracking ensures clear messaging (e.g., "Promoted from #3")
+```
+
+### Real-Time Booking Status Display
+```
+CUSTOMER DASHBOARD STATUS COLORS:
+- 'pending': Yellow - Awaiting agent confirmation
+- 'accepted': Green - Confirmed by agent
+- 'queued': Amber - In waitlist for exclusive slot
+- 'rejected': Red - Declined by agent
+- 'cancelled': Gray - Cancelled by customer
+
+VISUAL INDICATORS:
+- Recently promoted appointments have green border + ring effect
+- "🎉 Recently Promoted from #X" banner at top of appointment card
+- Queue position shown in status badge: "Queued (#2)"
+- High-demand warning on time selection: "🔥 High demand"
+
+STATUS LABELS:
+- 'pending': "Awaiting Confirmation"
+- 'accepted': "Confirmed"
+- 'queued': "Queued (#N)" (with queue position)
+- 'rejected': "Declined"
+- 'cancelled': "Cancelled"
+```
+
 ### Agent Unavailability Management
 ```
 UNAVAILABLE PERIOD RULES:
@@ -408,6 +497,40 @@ FUNCTION isStartTimeAvailable(agentId, date, startTime):
     
     // Check existing bookings and vacation status
     ... existing availability checks ...
+```
+
+### Agent Rating Duplicate Prevention
+```
+RATING RULES:
+1. Customers can rate agents ONLY for completed appointments (status: 'done' or 'completed')
+2. Each appointment can be rated ONLY ONCE
+3. Duplicate prevention is enforced in multiple ways:
+   a. appointment.hasRated: boolean flag set to true after rating
+   b. appointment.ratingId: stores ID of rating for reference
+   c. UI hides rating option if hasRated is true
+
+RATING FLOW:
+1. Agent marks appointment as DONE or COMPLETED
+2. Customer views completed appointment in dashboard
+3. IF NOT appointment.hasRated:
+   a. "Rate Your Experience" section appears
+   b. Customer clicks "Rate Agent"
+   c. Rating modal opens (1-5 stars + optional feedback)
+   d. Customer submits rating
+   e. appointment.hasRated = true
+   f. appointment.ratingId = new rating ID
+   g. Agent's rating average is recalculated
+4. IF appointment.hasRated:
+   a. "Thank you for rating!" message shown
+   b. No rating option available
+
+DUPLICATE PREVENTION CHECK:
+FUNCTION hasCustomerRatedAppointment(appointmentId, customerId):
+    appointment = getAppointment(appointmentId)
+    IF NOT appointment THEN RETURN false
+    IF appointment.hasRated THEN RETURN true
+    IF appointment.ratingId THEN RETURN true
+    RETURN false
 ```
 
 ### Purchase Priority Queue Logic

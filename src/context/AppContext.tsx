@@ -75,6 +75,12 @@ interface AppContextType {
   // Exclusive slot waitlist functions
   getSlotWaitlist: (propertyId: string, agentId: string, date: string, startTime: string) => Appointment[];
   getCustomerWaitlistPosition: (appointmentId: string) => number;
+  
+  // Seconds-precision booking contention functions
+  isSlotHighDemand: (propertyId: string, agentId: string, date: string, startTime: string) => boolean;
+  getSlotBookingCount: (propertyId: string, agentId: string, date: string, startTime: string) => number;
+  checkSecondsAvailability: (agentId: string, date: string, startTime: string) => { available: boolean; contention: boolean; waitlistSize: number };
+  hasCustomerRatedAppointment: (appointmentId: string, customerId: string) => boolean;
 
   // Reminder functions
   getUpcomingAppointments: (userId: string, role: UserRole, hoursAhead?: number) => Appointment[];
@@ -544,9 +550,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!appointment) return;
     
     const property = properties.find(p => p.id === appointment.propertyId);
+    const cancelTimestamp = new Date().toISOString();
     
     // Check if this customer had purchase priority
     const hadPurchaseRights = appointment.hasPurchaseRights;
+    
+    // Check if this was a queued booking for exclusive slot
+    const wasQueued = appointment.status === 'queued';
     
     // Update the appointment status to cancelled
     setAppointments(prev => prev.map(a => 
@@ -563,6 +573,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
       relatedId: id,
     });
 
+    // Handle queue promotion for exclusive slots
+    if (property?.isExclusive && !wasQueued) {
+      // Get other customers queued for this same slot
+      const queuedForSlot = appointments.filter(a => 
+        a.propertyId === appointment.propertyId && 
+        a.agentId === appointment.agentId &&
+        a.date === appointment.date &&
+        a.startTime === appointment.startTime &&
+        a.id !== id &&
+        a.status === 'queued'
+      ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      if (queuedForSlot.length > 0) {
+        // Promote the first queued customer
+        const promotedCustomer = queuedForSlot[0];
+        const previousPosition = promotedCustomer.queuePosition || 2;
+        
+        setAppointments(prev => prev.map(a => 
+          a.id === promotedCustomer.id 
+            ? { 
+                ...a, 
+                status: 'pending' as const, 
+                hasViewingRights: true,
+                queuePosition: 1,
+                promotedAt: cancelTimestamp,
+                promotedFromPosition: previousPosition
+              } 
+            : a
+        ));
+
+        // Update queue positions for remaining queued customers
+        queuedForSlot.slice(1).forEach((queuedAppt, index) => {
+          setAppointments(prev => prev.map(a => 
+            a.id === queuedAppt.id 
+              ? { ...a, queuePosition: index + 2 } 
+              : a
+          ));
+        });
+
+        // Clear notification to promoted customer
+        addNotification({
+          userId: promotedCustomer.customerId,
+          type: 'queue_promoted',
+          title: '🎉 You\'ve Been Promoted!',
+          message: `Great news! You are now confirmed for the ${appointment.startTime} slot at ${property?.title}. The customer ahead of you cancelled. Your booking is pending agent confirmation.`,
+          read: false,
+          relatedId: promotedCustomer.id,
+        });
+      }
+    }
+
     // If this customer had purchase rights, promote the next in queue
     if (hadPurchaseRights && property) {
       // Get all active appointments for this property, ordered by booking time
@@ -575,10 +636,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (activeAppointments.length > 0) {
         // Promote the next customer in queue
         const nextInQueue = activeAppointments[0];
+        const previousPosition = nextInQueue.queuePosition || 2;
         
-        // Update the next appointment to have purchase rights
+        // Update the next appointment to have purchase rights and track promotion
         setAppointments(prev => prev.map(a => 
-          a.id === nextInQueue.id ? { ...a, hasPurchaseRights: true } : a
+          a.id === nextInQueue.id 
+            ? { 
+                ...a, 
+                hasPurchaseRights: true,
+                promotedAt: cancelTimestamp,
+                promotedFromPosition: previousPosition
+              } 
+            : a
         ));
 
         // Update property first viewer
@@ -592,12 +661,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             : p
         ));
 
-        // Notify the promoted customer
+        // Clear and prominent notification to the promoted customer
         addNotification({
           userId: nextInQueue.customerId,
           type: 'priority_promoted',
-          title: 'Purchase Priority Granted',
-          message: `You now hold the first right to purchase ${property?.title || 'this property'}. The previous priority holder has cancelled.`,
+          title: '🎉 Purchase Priority Granted!',
+          message: `Congratulations! You now hold the first right to purchase ${property?.title || 'this property'}. The previous priority holder cancelled their booking.`,
           read: false,
           relatedId: nextInQueue.id,
         });
@@ -736,6 +805,105 @@ export function AppProvider({ children }: { children: ReactNode }) {
     
     const position = waitlist.findIndex(a => a.id === appointmentId);
     return position === -1 ? 0 : position + 1;
+  }, [appointments]);
+
+  // Check if a slot is high demand (has recent booking activity within last few minutes)
+  const isSlotHighDemand = useCallback((
+    propertyId: string,
+    agentId: string,
+    date: string,
+    startTime: string
+  ): boolean => {
+    const recentWindowMs = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    
+    const recentBookings = appointments.filter(a => 
+      a.propertyId === propertyId &&
+      a.agentId === agentId &&
+      a.date === date &&
+      a.startTime === startTime &&
+      !['cancelled', 'rejected'].includes(a.status) &&
+      (now - new Date(a.createdAt).getTime()) < recentWindowMs
+    );
+    
+    return recentBookings.length >= 1;
+  }, [appointments]);
+
+  // Get the count of bookings for a specific slot
+  const getSlotBookingCount = useCallback((
+    propertyId: string,
+    agentId: string,
+    date: string,
+    startTime: string
+  ): number => {
+    return appointments.filter(a => 
+      a.propertyId === propertyId &&
+      a.agentId === agentId &&
+      a.date === date &&
+      a.startTime === startTime &&
+      !['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)
+    ).length;
+  }, [appointments]);
+
+  // Check seconds-precision availability for a slot (backend-style check)
+  const checkSecondsAvailability = useCallback((
+    agentId: string,
+    date: string,
+    startTime: string
+  ): { available: boolean; contention: boolean; waitlistSize: number } => {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return { available: false, contention: false, waitlistSize: 0 };
+    if (agent.isOnVacation) return { available: false, contention: false, waitlistSize: 0 };
+    
+    // Check unavailable periods
+    const unavailablePeriods = agent.unavailablePeriods || [];
+    const isInUnavailablePeriod = unavailablePeriods.some(period => {
+      if (period.date !== date) return false;
+      return startTime >= period.startTime && startTime < period.endTime;
+    });
+    if (isInUnavailablePeriod) return { available: false, contention: false, waitlistSize: 0 };
+    
+    // Check if slot is manually blocked
+    const slot = agent.availability.find(s => 
+      s.date === date && s.startTime === startTime
+    );
+    if (slot && slot.isBooked && !slot.bookingId) return { available: false, contention: false, waitlistSize: 0 };
+    
+    // Check for existing appointments at this exact time
+    const existingAtTime = appointments.filter(a => {
+      if (a.agentId !== agentId) return false;
+      if (a.date !== date) return false;
+      if (['cancelled', 'rejected', 'done', 'sold', 'completed'].includes(a.status)) return false;
+      return a.startTime === startTime;
+    });
+    
+    // Check for contention (multiple booking attempts in recent seconds)
+    const recentWindowMs = 30 * 1000; // 30 seconds
+    const now = Date.now();
+    const recentAttempts = existingAtTime.filter(a => 
+      (now - new Date(a.createdAt).getTime()) < recentWindowMs
+    );
+    
+    const contention = recentAttempts.length > 0;
+    const waitlistSize = existingAtTime.length;
+    const available = existingAtTime.length === 0;
+    
+    return { available, contention, waitlistSize };
+  }, [agents, appointments]);
+
+  // Check if a customer has already rated an appointment (duplicate prevention)
+  const hasCustomerRatedAppointment = useCallback((appointmentId: string, _customerId: string): boolean => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return false;
+    
+    // Check if the appointment is marked as rated
+    if (appointment.hasRated) return true;
+    
+    // Also check if there's a rating ID stored (double-check)
+    if (appointment.ratingId) return true;
+    
+    // No rating found for this appointment
+    return false;
   }, [appointments]);
 
   // Check if a date is within the 7-day booking window
@@ -1345,6 +1513,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isDateWithinBookingWindow,
     getSlotWaitlist,
     getCustomerWaitlistPosition,
+    isSlotHighDemand,
+    getSlotBookingCount,
+    checkSecondsAvailability,
+    hasCustomerRatedAppointment,
     getUpcomingAppointments,
     sendAppointmentReminders,
     messages,

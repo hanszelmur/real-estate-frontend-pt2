@@ -111,7 +111,7 @@ export interface Appointment {
   hasViewingRights: boolean;
   hasPurchaseRights: boolean;
   purchaseDeclined?: boolean;
-  createdAt: string;
+  createdAt: string; // ISO timestamp with seconds precision for booking contention detection
   // New fields for enhanced features
   notes?: string; // Appointment notes
   customerName?: string; // Cached customer name for display
@@ -124,6 +124,13 @@ export interface Appointment {
   queuePosition?: number; // Position in waitlist (1 = confirmed, 2+ = queued)
   // Rating tracking
   hasRated?: boolean; // Whether the customer has rated this appointment
+  // Rating duplicate prevention - appointment ID to ensure one rating per appointment
+  ratingId?: string; // ID of the rating submitted for this appointment (prevents duplicates)
+  // Contention tracking with millisecond precision
+  bookingAttemptTimestamp?: string; // ISO timestamp with millisecond precision when booking was attempted
+  wasHighDemandSlot?: boolean; // Whether this slot had contention at booking time
+  promotedAt?: string; // ISO timestamp when customer was promoted from queue (for clear notifications)
+  promotedFromPosition?: number; // Previous queue position before promotion
 }
 
 // Message for appointment-specific messaging
@@ -140,7 +147,7 @@ export interface AppointmentMessage {
 export interface Notification {
   id: string;
   userId: string;
-  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'viewing_done' | 'property_sold' | 'property_available' | 'viewing_queued' | 'priority_promoted' | 'appointment_cancelled' | 'appointment_reminder' | 'queue_promoted' | 'slot_waitlisted';
+  type: 'booking_new' | 'booking_change' | 'booking_cancel' | 'agent_change' | 'purchase_rights' | 'viewing_only' | 'complaint' | 'timeout' | 'override' | 'booking_accepted' | 'booking_rejected' | 'booking_pending' | 'agent_reassigned' | 'approval_required' | 'no_agents_available' | 'viewing_done' | 'property_sold' | 'property_available' | 'viewing_queued' | 'priority_promoted' | 'appointment_cancelled' | 'appointment_reminder' | 'queue_promoted' | 'slot_waitlisted' | 'high_demand_warning' | 'booking_confirmed' | 'slot_contention';
   title: string;
   message: string;
   read: boolean;

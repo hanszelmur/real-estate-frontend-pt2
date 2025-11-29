@@ -24,7 +24,9 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     isDateWithinBookingWindow, 
     getCustomerPriorityPosition,
     isStartTimeAvailable,
-    getSlotWaitlist
+    getSlotWaitlist,
+    isSlotHighDemand,
+    checkSecondsAvailability
   } = useApp();
   const [step, setStep] = useState<BookingStep>('agent');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -82,6 +84,12 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     return getExistingBookingsForSlot(slot) + 1;
   };
 
+  // Check if a slot is high demand (recent booking activity)
+  const isSlotHighDemandForDisplay = (slot: AgentAvailability): boolean => {
+    if (!selectedAgent) return false;
+    return isSlotHighDemand(property.id, selectedAgent.id, slot.date, slot.startTime);
+  };
+
   const handleAgentSelect = (agent: Agent) => {
     setSelectedAgent(agent);
     setAutoAssign(false);
@@ -111,6 +119,12 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
   const handleConfirm = () => {
     if (!selectedAgent || !selectedSlot || !currentUser) return;
 
+    // Record the exact timestamp of booking attempt (ISO timestamp with millisecond precision)
+    const bookingAttemptTimestamp = new Date().toISOString();
+
+    // Check availability with contention detection before creating appointment
+    const availabilityCheck = checkSecondsAvailability(selectedAgent.id, selectedSlot.date, selectedSlot.startTime);
+    
     // Final check before creating appointment
     if (!isStartTimeAvailable(selectedAgent.id, selectedSlot.date, selectedSlot.startTime)) {
       setBookingError('This start time is no longer available. Please select a different time.');
@@ -129,8 +143,11 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
     const waitlist = getSlotWaitlist(property.id, selectedAgent.id, selectedSlot.date, selectedSlot.startTime);
     const queuePosition = waitlist.length + 1;
     const isQueued = property.isExclusive && waitlist.length > 0;
+    
+    // Detect if this is a high-demand slot with contention
+    const isHighDemand = availabilityCheck.contention || waitlist.length > 0;
 
-    // Create the appointment - status depends on exclusive logic
+    // Create the appointment with seconds-precision tracking
     const newAppointment = createAppointment({
       propertyId: property.id,
       customerId: currentUser.id,
@@ -145,6 +162,8 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
       customerName: customer?.name,
       customerEmail: customer?.email,
       customerPhone: customer?.phone,
+      bookingAttemptTimestamp, // Seconds-precision timestamp
+      wasHighDemandSlot: isHighDemand, // Track if this was a contested slot
     });
 
     // Mark the slot as booked only if this is the first booking
@@ -152,22 +171,27 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
       updateAgentAvailability(selectedAgent.id, selectedSlot.id, true, newAppointment.id);
     }
 
-    // Notify customer about status
+    // Notify customer about status with immediate feedback
     if (isQueued) {
       addNotification({
         userId: currentUser.id,
         type: 'slot_waitlisted',
         title: 'Added to Waitlist',
-        message: `You are #${queuePosition} in line for the ${formatTime(selectedSlot.startTime)} slot on ${formatDate(selectedSlot.date)} at ${property.title}. You will be notified if promoted.`,
+        message: `You are #${queuePosition} in line for the ${formatTime(selectedSlot.startTime)} slot on ${formatDate(selectedSlot.date)} at ${property.title}. You will be automatically promoted if customers ahead of you cancel.`,
         read: false,
         relatedId: newAppointment.id,
       });
     } else {
+      // Add high-demand warning if applicable
+      const highDemandMessage = isHighDemand 
+        ? ' This is a popular time slot - we recommend confirming with the agent quickly.'
+        : '';
+      
       addNotification({
         userId: currentUser.id,
-        type: 'booking_pending',
-        title: 'Booking Submitted',
-        message: `Your viewing request for ${property.title} at ${formatTime(selectedSlot.startTime)} has been submitted. The agent will confirm shortly.`,
+        type: 'booking_confirmed',
+        title: '✓ Booking Confirmed',
+        message: `Your viewing request for ${property.title} at ${formatTime(selectedSlot.startTime)} has been submitted successfully. The agent will confirm shortly.${highDemandMessage}`,
         read: false,
         relatedId: newAppointment.id,
       });
@@ -322,23 +346,37 @@ export default function BookingModal({ property, onClose, onSuccess }: BookingMo
                     const existingBookings = getExistingBookingsForSlot(slot);
                     const wouldBeQueued = property.isExclusive && existingBookings > 0;
                     const waitlistPosition = getWaitlistPositionForSlot(slot);
+                    const isHighDemand = isSlotHighDemandForDisplay(slot);
                     
                     return (
                       <button
                         key={slot.id}
                         onClick={() => handleSlotSelect(slot)}
-                        className={`p-2 text-sm rounded-md border transition-colors ${
+                        className={`p-2 text-sm rounded-md border transition-colors relative ${
                           selectedSlot?.id === slot.id
                             ? 'border-blue-500 bg-blue-50 text-blue-700'
                             : wouldBeQueued
                             ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
+                            : isHighDemand
+                            ? 'border-orange-300 bg-orange-50 hover:border-orange-400'
                             : 'border-gray-200 hover:border-blue-300'
                         }`}
                       >
+                        {isHighDemand && !wouldBeQueued && (
+                          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+                          </span>
+                        )}
                         <div className="font-medium">{formatTime(slot.startTime)}</div>
                         {wouldBeQueued && (
                           <div className="text-xs text-yellow-700 mt-1">
                             #{waitlistPosition} in line
+                          </div>
+                        )}
+                        {isHighDemand && !wouldBeQueued && (
+                          <div className="text-xs text-orange-600 mt-1">
+                            🔥 High demand
                           </div>
                         )}
                         {!property.isExclusive && existingBookings > 0 && (

@@ -47,12 +47,13 @@ export default function CustomerDashboard() {
   const acceptedCount = customerAppointments.filter(a => a.status === 'accepted' || a.status === 'scheduled').length;
   const pendingCount = customerAppointments.filter(a => a.status === 'pending' || a.status === 'pending_approval').length;
   const rejectedCount = customerAppointments.filter(a => a.status === 'rejected').length;
+  const queuedCount = customerAppointments.filter(a => a.status === 'queued').length;
 
   // Filter appointments based on active tab
   const filteredAppointments = customerAppointments.filter(a => {
     if (activeTab === 'all') return !['cancelled', 'completed', 'done', 'sold'].includes(a.status);
     if (activeTab === 'accepted') return a.status === 'accepted' || a.status === 'scheduled';
-    if (activeTab === 'pending') return a.status === 'pending' || a.status === 'pending_approval';
+    if (activeTab === 'pending') return a.status === 'pending' || a.status === 'pending_approval' || a.status === 'queued';
     if (activeTab === 'rejected') return a.status === 'rejected';
     return true;
   });
@@ -67,6 +68,13 @@ export default function CustomerDashboard() {
     a.status === 'completed' || a.status === 'cancelled' || a.status === 'done' || a.status === 'sold'
   );
 
+  // Check if appointment was recently promoted
+  // Using promotedAt field presence to indicate promotion status
+  const wasRecentlyPromoted = (appointment: Appointment): boolean => {
+    // If promotedAt exists, show as recently promoted
+    return !!appointment.promotedAt;
+  };
+
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -78,11 +86,12 @@ export default function CustomerDashboard() {
       case 'done': return 'bg-gray-100 text-gray-800';
       case 'sold': return 'bg-purple-100 text-purple-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
+      case 'queued': return 'bg-amber-100 text-amber-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, appointment?: Appointment) => {
     switch (status) {
       case 'pending': return 'Awaiting Confirmation';
       case 'pending_approval': return 'Approval Required';
@@ -93,6 +102,7 @@ export default function CustomerDashboard() {
       case 'done': return 'Viewing Done';
       case 'sold': return 'Property Purchased';
       case 'cancelled': return 'Cancelled';
+      case 'queued': return appointment?.queuePosition ? `Queued (#${appointment.queuePosition})` : 'Queued';
       default: return status;
     }
   };
@@ -102,7 +112,7 @@ export default function CustomerDashboard() {
       !['cancelled', 'completed', 'done', 'sold'].includes(a.status)
     ).length },
     { id: 'accepted' as TabStatus, label: 'Accepted', count: acceptedCount },
-    { id: 'pending' as TabStatus, label: 'Pending', count: pendingCount },
+    { id: 'pending' as TabStatus, label: 'Pending', count: pendingCount + queuedCount },
     { id: 'rejected' as TabStatus, label: 'Rejected', count: rejectedCount },
   ];
 
@@ -176,6 +186,7 @@ export default function CustomerDashboard() {
                     {sortedAppointments.map(appointment => {
                       const property = getProperty(appointment.propertyId);
                       const agent = getAgent(appointment.agentId);
+                      const isRecentlyPromoted = wasRecentlyPromoted(appointment);
 
                       return (
                         <div 
@@ -186,9 +197,20 @@ export default function CustomerDashboard() {
                               ? 'border-orange-300 bg-orange-50 hover:border-orange-400' 
                               : appointment.status === 'rejected'
                               ? 'border-red-200 bg-red-50 hover:border-red-300'
+                              : appointment.status === 'queued'
+                              ? 'border-amber-300 bg-amber-50 hover:border-amber-400'
+                              : isRecentlyPromoted
+                              ? 'border-green-400 bg-green-50 hover:border-green-500 ring-2 ring-green-200'
                               : 'hover:border-blue-300'
                           }`}
                         >
+                          {/* Recently Promoted Banner */}
+                          {isRecentlyPromoted && (
+                            <div className="mb-3 -mt-1 -mx-1 px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-t flex items-center">
+                              <span className="mr-1">🎉</span> Recently Promoted from #{appointment.promotedFromPosition || 2}
+                            </div>
+                          )}
+                          
                           <div className="flex items-start justify-between mb-3">
                             <div>
                               <h4 className="font-semibold text-lg text-gray-900">
@@ -198,10 +220,10 @@ export default function CustomerDashboard() {
                             </div>
                             <div className="flex flex-col items-end gap-1">
                               <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusBadgeColor(appointment.status)}`}>
-                                {getStatusLabel(appointment.status)}
+                                {getStatusLabel(appointment.status, appointment)}
                               </span>
                               {/* Priority Status Badge */}
-                              {appointment.status !== 'cancelled' && appointment.status !== 'rejected' && (
+                              {appointment.status !== 'cancelled' && appointment.status !== 'rejected' && appointment.status !== 'queued' && (
                                 <span className={`px-2 py-1 text-xs rounded-full ${
                                   getCustomerPriorityPosition(appointment.propertyId, currentUser.id) === 1
                                     ? 'bg-green-100 text-green-800'
@@ -232,6 +254,18 @@ export default function CustomerDashboard() {
                               </div>
                             </div>
                           </div>
+
+                          {/* Queued status message */}
+                          {appointment.status === 'queued' && (
+                            <div className="mt-3 pt-3 border-t border-amber-200">
+                              <p className="text-sm text-amber-700 flex items-center">
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                You&apos;re #{appointment.queuePosition} in line. You&apos;ll be notified if promoted.
+                              </p>
+                            </div>
+                          )}
 
                           {/* Action hint */}
                           {appointment.status === 'pending_approval' && (

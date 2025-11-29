@@ -119,6 +119,7 @@ export default function CustomerAppointmentModal({
       case 'done': return 'bg-gray-100 text-gray-800';
       case 'sold': return 'bg-purple-100 text-purple-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
+      case 'queued': return 'bg-amber-100 text-amber-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -134,6 +135,7 @@ export default function CustomerAppointmentModal({
       case 'done': return 'Viewing Completed';
       case 'sold': return 'Property Sold - Congratulations!';
       case 'cancelled': return 'Cancelled';
+      case 'queued': return `Queued (#${appointment.queuePosition || '?'})`;
       default: return status;
     }
   };
@@ -220,6 +222,43 @@ export default function CustomerAppointmentModal({
                         <strong>Reason:</strong> {appointment.rejectionReason}
                       </p>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Queued Status Notice */}
+            {appointment.status === 'queued' && (
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-amber-500 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h4 className="font-medium text-amber-800">You&apos;re in the Queue</h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      You are currently #{appointment.queuePosition} in line for this exclusive viewing slot. 
+                      If customers ahead of you cancel, you will be automatically promoted and notified.
+                    </p>
+                    <p className="text-xs text-amber-600 mt-2">
+                      💡 Tip: You&apos;ll receive a notification instantly when promoted.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recently Promoted Notice */}
+            {appointment.promotedAt && appointment.status !== 'queued' && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-start">
+                  <span className="text-xl mr-3">🎉</span>
+                  <div>
+                    <h4 className="font-medium text-green-800">You&apos;ve Been Promoted!</h4>
+                    <p className="text-sm text-green-700 mt-1">
+                      Great news! You were promoted from position #{appointment.promotedFromPosition || 2} 
+                      because a customer ahead of you cancelled. Your viewing is now confirmed pending agent approval.
+                    </p>
                   </div>
                 </div>
               </div>
