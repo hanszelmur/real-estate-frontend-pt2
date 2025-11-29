@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { formatCurrency, getInitials, generateStars } from '../utils/helpers';
 import BookingModal from '../components/booking/BookingModal';
 import EditPropertyModal from '../components/common/EditPropertyModal';
+import ImageGallery from '../components/common/ImageGallery';
 
 export default function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,21 +86,19 @@ export default function PropertyDetailPage() {
       {/* Property header */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Image */}
-          <div className="relative h-96">
-            <img
-              src={property.imageUrl}
-              alt={property.title}
-              className="w-full h-full object-cover"
-            />
-            <span className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusBadge[property.status]}`}>
-              {property.status}
-            </span>
+          {/* Image Gallery */}
+          <div className="relative">
+            {/* Status Badge - positioned absolutely over the gallery */}
+            <div className="absolute top-4 right-4 z-10">
+              <span className={`px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusBadge[property.status]}`}>
+                {property.status}
+              </span>
+            </div>
             {/* Edit Button for agents/admins */}
             {canEdit && (
               <button
                 onClick={() => setShowEditModal(true)}
-                className="absolute top-4 left-4 px-3 py-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 text-blue-600 rounded-md text-sm font-medium flex items-center shadow-sm hover:shadow transition-all"
+                className="absolute top-4 left-4 z-10 px-3 py-1.5 bg-white bg-opacity-90 hover:bg-opacity-100 text-blue-600 rounded-md text-sm font-medium flex items-center shadow-sm hover:shadow transition-all"
                 title="Edit Property"
               >
                 <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,10 +107,19 @@ export default function PropertyDetailPage() {
                 Edit Property
               </button>
             )}
+            {/* Display gallery if multiple images, otherwise single image */}
+            <div className="p-4">
+              <ImageGallery 
+                images={property.imageUrls && property.imageUrls.length > 0 
+                  ? property.imageUrls 
+                  : [property.imageUrl]} 
+                title={property.title} 
+              />
+            </div>
           </div>
 
           {/* Info */}
-          <div className="p-6">
+          <div className="p-6 pt-2">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between">
               <div className="flex-grow">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{property.title}</h1>
