@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { Property } from '../../types';
+import ImageUploader from './ImageUploader';
 
 interface EditPropertyModalProps {
   property: Property;
@@ -17,7 +18,7 @@ interface FormErrors {
   bedrooms?: string;
   bathrooms?: string;
   sqft?: string;
-  imageUrl?: string;
+  images?: string;
 }
 
 /**
@@ -35,12 +36,26 @@ interface FormErrors {
  * - Bedrooms (required): Number of bedrooms
  * - Bathrooms (required): Number of bathrooms
  * - Area/sqm (required): Property area in square meters
- * - Image URL (required): URL to property image
+ * - Images (required): One or more property images (upload or URL)
  * - Features (optional): Comma-separated feature list
  * - Exclusive (optional): Flag for exclusive listings
+ * 
+ * Image Management:
+ * - Displays existing images with ability to remove/reorder
+ * - Supports adding new images via file upload or URL
+ * - First image becomes the primary/cover image
  */
 export default function EditPropertyModal({ property, onClose, onSuccess }: EditPropertyModalProps) {
   const { updateProperty, currentUser } = useApp();
+
+  // Initialize images array from property
+  // Use imageUrls if available, otherwise fall back to single imageUrl
+  const getInitialImages = (): string[] => {
+    if (property.imageUrls && property.imageUrls.length > 0) {
+      return property.imageUrls;
+    }
+    return property.imageUrl ? [property.imageUrl] : [];
+  };
 
   // Form state - initialized with current property values
   const [title, setTitle] = useState(property.title);
@@ -51,7 +66,7 @@ export default function EditPropertyModal({ property, onClose, onSuccess }: Edit
   const [bedrooms, setBedrooms] = useState(property.bedrooms.toString());
   const [bathrooms, setBathrooms] = useState(property.bathrooms.toString());
   const [sqft, setSqft] = useState(property.sqft.toString());
-  const [imageUrl, setImageUrl] = useState(property.imageUrl);
+  const [images, setImages] = useState<string[]>(getInitialImages);
   const [features, setFeatures] = useState(
     property.features.filter(f => f !== 'Exclusive').join(', ')
   );
@@ -70,7 +85,14 @@ export default function EditPropertyModal({ property, onClose, onSuccess }: Edit
     setBedrooms(property.bedrooms.toString());
     setBathrooms(property.bathrooms.toString());
     setSqft(property.sqft.toString());
-    setImageUrl(property.imageUrl);
+    // Reset images from property
+    if (property.imageUrls && property.imageUrls.length > 0) {
+      setImages(property.imageUrls);
+    } else if (property.imageUrl) {
+      setImages([property.imageUrl]);
+    } else {
+      setImages([]);
+    }
     setFeatures(property.features.filter(f => f !== 'Exclusive').join(', '));
     setIsExclusive(property.isExclusive || property.features.includes('Exclusive'));
   }, [property]);
@@ -119,14 +141,8 @@ export default function EditPropertyModal({ property, onClose, onSuccess }: Edit
       newErrors.sqft = 'Area must be a positive number';
     }
 
-    if (!imageUrl.trim()) {
-      newErrors.imageUrl = 'Image URL is required';
-    } else {
-      try {
-        new URL(imageUrl);
-      } catch {
-        newErrors.imageUrl = 'Please enter a valid URL';
-      }
+    if (images.length === 0) {
+      newErrors.images = 'At least one image is required';
     }
 
     setErrors(newErrors);
@@ -156,6 +172,8 @@ export default function EditPropertyModal({ property, onClose, onSuccess }: Edit
         : featureList.filter(f => f !== 'Exclusive');
 
       // Update property data
+      // First image becomes the primary imageUrl for backward compatibility
+      // All images are stored in imageUrls array for gallery display
       const updates: Partial<Property> = {
         title: title.trim(),
         address: address.trim(),
@@ -165,7 +183,8 @@ export default function EditPropertyModal({ property, onClose, onSuccess }: Edit
         bedrooms: Number(bedrooms),
         bathrooms: Number(bathrooms),
         sqft: Number(sqft),
-        imageUrl: imageUrl.trim(),
+        imageUrl: images[0], // Primary image for backward compatibility
+        imageUrls: images, // All images for gallery
         features: allFeatures,
         isExclusive,
       };
@@ -386,25 +405,17 @@ export default function EditPropertyModal({ property, onClose, onSuccess }: Edit
                 {errors.sqft && <p className="mt-1 text-sm text-red-500">{errors.sqft}</p>}
               </div>
 
-              {/* Image URL */}
+              {/* Property Images */}
               <div>
-                <label htmlFor="edit-imageUrl" className="block text-sm font-medium text-gray-700 mb-1">
-                  Image URL <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Property Images <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="url"
-                  id="edit-imageUrl"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className={`w-full rounded-md shadow-sm text-sm p-2.5 border ${
-                    errors.imageUrl ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                  }`}
-                  placeholder="https://example.com/property-image.jpg"
+                <ImageUploader
+                  images={images}
+                  onImagesChange={setImages}
+                  maxImages={10}
                 />
-                {errors.imageUrl && <p className="mt-1 text-sm text-red-500">{errors.imageUrl}</p>}
-                <p className="mt-1 text-xs text-gray-500">
-                  Enter a URL for the property image. You can use services like Unsplash or Imgur.
-                </p>
+                {errors.images && <p className="mt-1 text-sm text-red-500">{errors.images}</p>}
               </div>
 
               {/* Features */}

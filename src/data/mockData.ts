@@ -110,6 +110,8 @@ export const mockAgents: Agent[] = [
 ];
 
 // Sample properties in Davao, Philippines
+// Properties include imageUrls array for gallery support (new feature)
+// The imageUrl field is maintained for backward compatibility
 export const mockProperties: Property[] = [
   {
     id: 'prop-1',
@@ -122,6 +124,12 @@ export const mockProperties: Property[] = [
     bathrooms: 3,
     sqft: 350,
     imageUrl: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=800',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=800',
+      'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800',
+      'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800',
+      'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800',
+    ],
     status: 'available',
     features: ['Swimming Pool', 'Garden', 'Garage', 'Security System', 'Ocean View'],
   },
@@ -136,6 +144,11 @@ export const mockProperties: Property[] = [
     bathrooms: 2,
     sqft: 150,
     imageUrl: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800',
+      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800',
+      'https://images.unsplash.com/photo-1600573472550-8090b5e0745e?w=800',
+    ],
     status: 'available',
     features: ['Parking', 'Balcony', 'Near Schools', 'Gated Community'],
   },
@@ -150,6 +163,13 @@ export const mockProperties: Property[] = [
     bathrooms: 2,
     sqft: 95,
     imageUrl: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800',
+      'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800',
+      'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=800',
+      'https://images.unsplash.com/photo-1560185008-b033106af5c3?w=800',
+      'https://images.unsplash.com/photo-1560184897-ae75f418493e?w=800',
+    ],
     status: 'available',
     features: ['Gym Access', 'Pool', 'Concierge', 'City View', 'Parking'],
   },
@@ -164,6 +184,11 @@ export const mockProperties: Property[] = [
     bathrooms: 1,
     sqft: 800,
     imageUrl: 'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=800',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=800',
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
+      'https://images.unsplash.com/photo-1540541338287-41700207dee6?w=800',
+    ],
     status: 'available',
     features: ['Beachfront', 'Large Lot', 'Island Living', 'Investment Potential'],
   },
@@ -178,6 +203,12 @@ export const mockProperties: Property[] = [
     bathrooms: 3,
     sqft: 280,
     imageUrl: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
+      'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800',
+      'https://images.unsplash.com/photo-1600210492486-724fe5c67fb3?w=800',
+      'https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=800',
+    ],
     status: 'available',
     features: ['Large Backyard', 'Garage', 'Near Highway', 'Quiet Neighborhood'],
   },
@@ -192,6 +223,7 @@ export const mockProperties: Property[] = [
     bathrooms: 1,
     sqft: 80,
     imageUrl: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800',
+    // Single image only - demonstrates backward compatibility
     status: 'available',
     features: ['Newly Renovated', 'Affordable', 'Ready to Move In'],
   },

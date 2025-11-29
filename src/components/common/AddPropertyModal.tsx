@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import type { Property } from '../../types';
+import ImageUploader from './ImageUploader';
 
 interface AddPropertyModalProps {
   onClose: () => void;
@@ -16,7 +17,7 @@ interface FormErrors {
   bedrooms?: string;
   bathrooms?: string;
   sqft?: string;
-  imageUrl?: string;
+  images?: string;
 }
 
 /**
@@ -31,9 +32,16 @@ interface FormErrors {
  * - Bedrooms (required): Number of bedrooms
  * - Bathrooms (required): Number of bathrooms
  * - Area/sqm (required): Property area in square meters
- * - Image URL (required): URL to property image
+ * - Images (required): One or more property images (upload or URL)
  * - Exclusive (optional): Flag for exclusive listings
  * - Features (optional): Comma-separated feature list
+ * 
+ * Image Upload:
+ * - Supports multiple image selection from local files (Downloads, etc.)
+ * - Supports pasting image URLs (Unsplash, Imgur, etc.)
+ * - Images are converted to base64 data URLs for frontend-only demo
+ * - In production, images would be sent as multipart/form-data to backend
+ * - First image in the list becomes the primary/cover image
  * 
  * Access Control: Only agents and admins can add properties.
  */
@@ -49,7 +57,7 @@ export default function AddPropertyModal({ onClose, onSuccess }: AddPropertyModa
   const [bedrooms, setBedrooms] = useState('');
   const [bathrooms, setBathrooms] = useState('');
   const [sqft, setSqft] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [features, setFeatures] = useState('');
   const [isExclusive, setIsExclusive] = useState(false);
   
@@ -100,14 +108,8 @@ export default function AddPropertyModal({ onClose, onSuccess }: AddPropertyModa
       newErrors.sqft = 'Area must be a positive number';
     }
 
-    if (!imageUrl.trim()) {
-      newErrors.imageUrl = 'Image URL is required';
-    } else {
-      try {
-        new URL(imageUrl);
-      } catch {
-        newErrors.imageUrl = 'Please enter a valid URL';
-      }
+    if (images.length === 0) {
+      newErrors.images = 'At least one image is required';
     }
 
     setErrors(newErrors);
@@ -137,6 +139,8 @@ export default function AddPropertyModal({ onClose, onSuccess }: AddPropertyModa
         : featureList;
 
       // Create property data
+      // First image becomes the primary imageUrl for backward compatibility
+      // All images are stored in imageUrls array for gallery display
       const propertyData: Omit<Property, 'id'> = {
         title: title.trim(),
         address: address.trim(),
@@ -146,7 +150,8 @@ export default function AddPropertyModal({ onClose, onSuccess }: AddPropertyModa
         bedrooms: Number(bedrooms),
         bathrooms: Number(bathrooms),
         sqft: Number(sqft),
-        imageUrl: imageUrl.trim(),
+        imageUrl: images[0], // Primary image for backward compatibility
+        imageUrls: images, // All images for gallery
         features: allFeatures,
         status: 'available',
         // Assign the current agent to this property if they are an agent
@@ -343,25 +348,17 @@ export default function AddPropertyModal({ onClose, onSuccess }: AddPropertyModa
                 {errors.sqft && <p className="mt-1 text-sm text-red-500">{errors.sqft}</p>}
               </div>
 
-              {/* Image URL */}
+              {/* Property Images */}
               <div>
-                <label htmlFor="imageUrl" className="block text-sm font-medium text-gray-700 mb-1">
-                  Image URL <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Property Images <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="url"
-                  id="imageUrl"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className={`w-full rounded-md shadow-sm text-sm p-2.5 border ${
-                    errors.imageUrl ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-                  }`}
-                  placeholder="https://example.com/property-image.jpg"
+                <ImageUploader
+                  images={images}
+                  onImagesChange={setImages}
+                  maxImages={10}
                 />
-                {errors.imageUrl && <p className="mt-1 text-sm text-red-500">{errors.imageUrl}</p>}
-                <p className="mt-1 text-xs text-gray-500">
-                  Enter a URL for the property image. You can use services like Unsplash or Imgur.
-                </p>
+                {errors.images && <p className="mt-1 text-sm text-red-500">{errors.images}</p>}
               </div>
 
               {/* Features */}

@@ -25,7 +25,8 @@ export interface Property {
   bedrooms: number;
   bathrooms: number;
   sqft: number;
-  imageUrl: string;
+  imageUrl: string; // Primary/legacy image URL
+  imageUrls?: string[]; // Array of image URLs for gallery (runtime-uploaded or external URLs)
   status: 'available' | 'pending' | 'sold';
   features: string[];
   // Race logic: first customer to complete viewing has purchase rights
