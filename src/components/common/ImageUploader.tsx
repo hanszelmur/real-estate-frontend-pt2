@@ -36,18 +36,39 @@ export default function ImageUploader({ images, onImagesChange, maxImages = 10 }
 
     const remainingSlots = maxImages - images.length;
     const filesToProcess = Array.from(files).slice(0, remainingSlots);
+    
+    // Filter to only image files and warn if non-images were included
+    const imageFiles = filesToProcess.filter((file) => file.type.startsWith('image/'));
+    const skippedCount = filesToProcess.length - imageFiles.length;
+    if (skippedCount > 0) {
+      setUrlError(`${skippedCount} non-image file(s) were skipped`);
+      setTimeout(() => setUrlError(''), 3000);
+    }
 
-    filesToProcess.forEach((file) => {
-      if (!file.type.startsWith('image/')) return;
+    // Process all files and collect results to update state once
+    const readPromises = imageFiles.map((file) => {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target?.result as string;
+          if (dataUrl) {
+            resolve(dataUrl);
+          } else {
+            reject(new Error('Failed to read file'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    });
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        if (dataUrl) {
-          onImagesChange([...images, dataUrl]);
-        }
-      };
-      reader.readAsDataURL(file);
+    // Wait for all files to be read, then update state once
+    Promise.all(readPromises).then((newDataUrls) => {
+      if (newDataUrls.length > 0) {
+        onImagesChange([...images, ...newDataUrls]);
+      }
+    }).catch((error) => {
+      console.error('Error reading files:', error);
     });
   };
 
@@ -80,12 +101,14 @@ export default function ImageUploader({ images, onImagesChange, maxImages = 10 }
     const trimmedUrl = urlInput.trim();
     if (!trimmedUrl) return;
 
+    // Check max images first before validating URL
+    if (images.length >= maxImages) {
+      setUrlError(`Maximum ${maxImages} images allowed`);
+      return;
+    }
+
     try {
       new URL(trimmedUrl);
-      if (images.length >= maxImages) {
-        setUrlError(`Maximum ${maxImages} images allowed`);
-        return;
-      }
       onImagesChange([...images, trimmedUrl]);
       setUrlInput('');
       setUrlError('');

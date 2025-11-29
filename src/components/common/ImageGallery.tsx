@@ -69,7 +69,13 @@ export default function ImageGallery({ images, title = 'Property' }: ImageGaller
   };
 
   return (
-    <div className="w-full" onKeyDown={handleKeyDown} tabIndex={0}>
+    <div 
+      className="w-full" 
+      onKeyDown={handleKeyDown} 
+      tabIndex={0}
+      role="region"
+      aria-label={`Image gallery for ${title}, showing image ${currentIndex + 1} of ${images.length}`}
+    >
       {/* Main Image Container */}
       <div className="relative w-full h-96 group">
         <img
@@ -107,7 +113,7 @@ export default function ImageGallery({ images, title = 'Property' }: ImageGaller
       </div>
 
       {/* Thumbnail Navigation */}
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Image thumbnails">
         {images.map((image, index) => (
           <button
             key={index}
@@ -117,8 +123,9 @@ export default function ImageGallery({ images, title = 'Property' }: ImageGaller
                 ? 'border-blue-600 ring-2 ring-blue-600'
                 : 'border-transparent hover:border-gray-300'
             }`}
+            role="tab"
             aria-label={`View image ${index + 1}`}
-            aria-current={index === currentIndex ? 'true' : 'false'}
+            aria-selected={index === currentIndex}
           >
             <img
               src={image}
