@@ -8,6 +8,52 @@
 
 A comprehensive real estate frontend application for TES Properties, based in Davao City, Philippines. This application showcases property listings, booking flows, and role-based dashboards for customers, agents, and administrators.
 
+## 🎪 Demo & Frontend-Only Operation
+
+> **This is a frontend-only demonstration application.** All data is stored in React context state and resets on page refresh. This enables evaluation of UI/UX flows without requiring backend infrastructure.
+
+### How This Frontend Works
+
+| Aspect | Current Implementation | Fullstack Integration |
+|--------|------------------------|----------------------|
+| **Data Storage** | React Context (in-memory) | Backend API + Database |
+| **User Auth** | Role-based demo login (no password) | JWT/OAuth + password auth |
+| **Data Persistence** | Resets on refresh | Persisted to database |
+| **SMS Verification** | Any 6-digit code works | Real SMS provider (Twilio) |
+| **Notifications** | In-app only | Push/Email + in-app |
+| **Real-time Updates** | Single-browser session | WebSocket broadcast |
+
+### Running the Demo
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` and select a role (Customer, Agent, or Admin) from the demo login page. No credentials required - this is a frontend demonstration.
+
+---
+
+## 📋 Table of Contents
+
+- [Demo & Frontend-Only Operation](#-demo--frontend-only-operation)
+- [Latest System Enhancement Release](#-latest-system-enhancement-release)
+- [Mocked vs Real API Actions](#-mocked-vs-real-api-actions)
+- [Screenshots & UI States](#-screenshots--ui-states)
+- [User Roles and Permissions](#-user-roles-and-permissions)
+- [Features & Business Rules](#-features--business-rules)
+- [Project Structure](#-project-structure)
+- [Mock Data Handling](#-mock-data-handling)
+- [Future Backend Integration (TODO)](#-future-backend-integration-todo)
+- [Features NOT Yet Implemented](#-features-not-yet-implemented)
+- [Setup Instructions](#-setup-instructions)
+- [Extending & Modifying](#-how-to-extendmodify)
+- [Developer Warnings](#-developer--ai-warnings)
+- [Changelog](#-changelog--whats-new)
+- [Contact](#-contact)
+
+---
+
 ## 🎯 Latest System Enhancement Release
 
 This release includes major enhancements to booking, property, and purchase flows:
@@ -33,68 +79,210 @@ This release includes major enhancements to booking, property, and purchase flow
 
 ---
 
+## 🔄 Mocked vs Real API Actions
+
+This section clarifies which features are fully functional in the frontend demo (mocked/simulated) versus which would require real backend integration in production.
+
+### ✅ Fully Functional in Frontend Demo (Mocked)
+
+These actions work completely within the demo but use in-memory state that resets on refresh:
+
+| Feature | Demo Behavior | Production Backend Requirement |
+|---------|--------------|-------------------------------|
+| **Property Browsing** | All properties visible with filters | REST API: `GET /api/properties` |
+| **Property Add/Edit** | Instant UI update | REST API: `POST/PUT /api/properties` |
+| **Booking Flow** | Complete flow with slot selection | REST API: `POST /api/appointments` |
+| **Agent Selection** | Real-time availability check | REST API: `GET /api/agents/availability` |
+| **Appointment Accept/Reject** | Instant status change | REST API: `PATCH /api/appointments/:id` |
+| **Cancel Appointment** | Removes booking, updates queue | REST API: `DELETE /api/appointments/:id` |
+| **Queue Promotion** | Auto-promotes next customer | Backend job/trigger on cancellation |
+| **Agent Rating** | Stores rating, updates average | REST API: `POST /api/ratings` |
+| **Mark Done/Sold** | Updates property & appointment | REST API: `PATCH /api/appointments/:id/complete` |
+| **Notifications** | In-app notifications work | WebSocket + Push notification service |
+| **Priority Queue Display** | Shows position in queue | REST API: `GET /api/properties/:id/queue` |
+| **Profile Updates** | Saves name, email, phone | REST API: `PUT /api/users/:id/profile` |
+| **Agent Calendar** | Full month/day view | REST API: `GET /api/agents/:id/calendar` |
+| **Agent Unavailability** | Block time periods | REST API: `POST /api/agents/:id/unavailable` |
+| **Vacation Mode Toggle** | Agent on/off vacation | REST API: `PATCH /api/agents/:id/vacation` |
+
+### ⚠️ Simulated/Demo-Only Features
+
+These features work in the demo but are simplified simulations:
+
+| Feature | Demo Behavior | Production Requirement |
+|---------|--------------|----------------------|
+| **SMS Verification** | Any 6-digit code accepted | Twilio/SMS API integration |
+| **User Authentication** | Role selection (no password) | JWT/OAuth2 with password hashing |
+| **Two-Way Messaging** | Works in-session only | WebSocket + message persistence |
+| **Session Persistence** | Resets on refresh | Session tokens + database |
+| **Multi-User Sync** | Single browser only | WebSocket broadcast to all clients |
+| **Appointment Reminders** | Function exists, no scheduler | Cron job + email/push service |
+| **High Demand Detection** | Based on recent bookings | Real-time WebSocket + analytics |
+
+### 🚫 Not Implemented (Backend Required)
+
+These features are NOT available in the frontend demo and require backend:
+
+| Feature | Why Not Implemented |
+|---------|---------------------|
+| **Password Auth** | Requires secure hashing + storage |
+| **Email Notifications** | Requires email service (SendGrid, etc.) |
+| **Push Notifications** | Requires FCM/APNS integration |
+| **File/Image Upload** | Requires file storage (S3, etc.) |
+| **Search Indexing** | Requires Elasticsearch or similar |
+| **Analytics Dashboard** | Requires data aggregation pipeline |
+| **Payment Processing** | Requires payment gateway |
+| **Document Management** | Requires secure file storage |
+
+---
+
 ## 📸 Screenshots & UI States
 
-All screenshots are current as of the latest release. Each image is annotated with its context.
+All screenshots are current as of the latest release. Each image is annotated with its context, showing the features available in each view.
 
-### Home Page
-*Public landing page showing featured properties, company info, and call-to-action buttons.*
+> **Note:** Screenshots may not include all features. To experience all interactive elements, run the demo locally with `npm run dev`.
+
+### 🏠 Home Page
+**Route:** `/` (public)  
+**Annotation:** Public landing page showing featured properties, company info, and call-to-action buttons.
+
+**Interactive Elements (Mocked):**
+- "Browse Properties" → Navigates to property listings
+- "Login" → Navigates to role selection demo login
+- Featured property cards → Click to view details
 
 ![Home Page](https://github.com/user-attachments/assets/c380dc9a-80f3-418b-84e4-681bb1bb1607)
 
-### Login Page (Role Selection)
-*Demo login page allowing selection between Customer, Agent, and Admin roles. Each role has restricted access.*
+---
+
+### 🔐 Login Page (Role Selection)
+**Route:** `/login` (public)  
+**Annotation:** Demo login page allowing selection between Customer, Agent, and Admin roles. Each role has restricted access to different parts of the application.
+
+**Interactive Elements (Mocked):**
+- Role buttons (Customer/Agent/Admin) → Sets demo session
+- No password required (demo mode)
 
 ![Login Page](https://github.com/user-attachments/assets/79fff809-9a9a-45c4-a155-f6e643b145f6)
 
-### Customer Dashboard
-*Customer's main dashboard showing appointment tabs (All, Accepted, Pending, Rejected), priority status badges, notifications, and quick actions.*
+---
 
-**Features shown:**
-- Priority position badges on each appointment (e.g., "1st in line", "2nd in line")
-- Status indicators for booking confirmation
-- Click to view details, cancel, or chat
+### 👤 Customer Dashboard
+**Route:** `/customer/dashboard` (authenticated: customer)  
+**Annotation:** Customer's main dashboard showing appointment tabs (All, Accepted, Pending, Rejected), priority status badges, notifications, and quick actions.
+
+**Interactive Elements (Mocked):**
+- Tab filters (All, Accepted, Pending, Rejected) → Filter appointments
+- Appointment cards → Click to view details, cancel, or message agent
+- Priority badges showing queue position (e.g., "1st in line")
+- Notification bell → View unread notifications
+- "Book Viewing" button → Open booking modal
+
+**Business Rules Demonstrated:**
+- Priority position calculated by booking timestamp (first booked = first priority)
+- Status color coding: Green (Accepted), Yellow (Pending), Red (Rejected), Gray (Cancelled)
 
 ![Customer Dashboard](https://github.com/user-attachments/assets/fa4c3516-063a-415f-87ab-de86dc7df818)
 
-### Customer Appointment Modal
-*Appointment detail view with cancel functionality and priority status.*
+---
 
-**Features shown:**
-- Purchase priority status display
-- Cancel appointment button with confirmation
-- Agent contact and messaging options
-- Professional priority text (e.g., "You currently hold the first right to purchase")
+### 📋 Customer Appointment Modal
+**Route:** `/customer/dashboard` → Click appointment (modal)  
+**Annotation:** Appointment detail view with cancel functionality and priority status.
 
-### Booking Modal - 7-Day Window
-*Booking flow showing 7-day rolling window restriction.*
+**Interactive Elements (Mocked):**
+- "Cancel Appointment" button → Confirmation dialog, then cancels
+- "Message Agent" button → Opens chat (requires SMS verification)
+- Priority status display (e.g., "You currently hold the first right to purchase")
 
-**Features shown:**
-- Notice about 7-day booking window limit
-- Available time slots within window only
-- Priority position preview before confirming
+**Business Rules Demonstrated:**
+- Cancel triggers queue promotion for next customer
+- Messaging requires both parties to be SMS verified
 
-### Customer Settings Page
-*Customer profile settings with profile information fields and phone verification status. Shows verified state with green indicator.*
+---
+
+### 📅 Booking Modal - 7-Day Window
+**Route:** `/properties/:id` → "Book Viewing" (modal)  
+**Annotation:** Booking flow showing 7-day rolling window restriction with agent selection and time slot picker.
+
+**Interactive Elements (Mocked):**
+- Agent dropdown → Select available agent
+- Date picker → 7-day window enforced
+- Time slot grid → Select start time (end time controlled by agent)
+- "Book" button → Creates appointment, notifies agent
+
+**Business Rules Demonstrated:**
+- Booking limited to next 7 days
+- Exclusive properties show waitlist position if slot taken
+- High-demand slots show 🔥 indicator
+
+---
+
+### ⚙️ Customer Settings Page
+**Route:** `/customer/settings` (authenticated: customer)  
+**Annotation:** Customer profile settings with profile information fields and phone verification status.
+
+**Interactive Elements (Mocked):**
+- Name, Email, Phone fields → Editable, saves to context
+- "Send Verification Code" → Triggers SMS flow (demo: any 6-digit code works)
+- Verification status indicator (green = verified)
+
+**Business Rules Demonstrated:**
+- SMS verification required for messaging
+- Profile updates are immediate (mocked)
 
 ![Customer Settings](https://github.com/user-attachments/assets/5d337c52-8f6d-4e79-99f7-988c334793ab)
 
-### Agent Dashboard - Queue Table
-*Agent dashboard with purchase priority queue table by property.*
+---
 
-**Features shown:**
-- Expandable queue tables showing customer order
-- Booking timestamp for each customer
-- Viewing date for each appointment
-- First position highlighted
+### 👔 Agent Dashboard - Queue Table
+**Route:** `/agent/dashboard` (authenticated: agent)  
+**Annotation:** Agent dashboard with appointments, purchase priority queue tables by property, and quick actions.
 
-### Admin Dashboard - Sold Properties
-*Admin dashboard showing sold properties section and purchase queues.*
+**Interactive Elements (Mocked):**
+- Appointment cards → Accept/Reject/Mark Done/Mark Sold
+- Queue tables → Expandable, showing customer order by booking time
+- "Add Property" button → Opens property creation modal
+- Vacation toggle → Enable/disable availability
 
-**Features shown:**
-- Sold properties list with sale price
-- Agent who completed sale
-- Active purchase queues by property
+**Business Rules Demonstrated:**
+- Priority determined by booking timestamp, NOT viewing date
+- First in queue has purchase rights
+- Agent can mark viewing as "Done" (property stays available) or "Sold" (property marked sold)
+
+---
+
+### 📅 Agent Calendar
+**Route:** `/agent/calendar` (authenticated: agent)  
+**Annotation:** Full month view with day detail panel. Shows appointments, buffer periods, and unavailable times.
+
+**Interactive Elements (Mocked):**
+- Month navigation → Previous/Next month
+- Day cells → Click to view day detail
+- "Mark Unavailable" button → Block time periods
+- Appointment slots → Click for details
+
+**Business Rules Demonstrated:**
+- 2-hour buffer after completed viewings
+- Unavailable periods block booking
+- Double-booking prevention across all properties
+
+---
+
+### 🛡️ Admin Dashboard - Sold Properties
+**Route:** `/internal/admin/dashboard` (authenticated: admin)  
+**Annotation:** Admin dashboard showing sold properties section, all appointments, and purchase queues system-wide.
+
+**Interactive Elements (Mocked):**
+- Agent override → Reassign agent to appointment
+- Alert resolution → Mark complaints as resolved
+- "Add Property" button → Create new listings
+- View all queues across all properties
+
+**Business Rules Demonstrated:**
+- Admin sees all appointments across all agents
+- Manual override creates audit trail
+- Sold properties tracked with sale price and agent
 
 ---
 
@@ -715,41 +903,403 @@ if (response.success) {
 ## 🏗️ Project Structure
 
 ```
-src/
-├── components/
-│   ├── booking/         # BookingModal
-│   ├── common/          # Reusable components
-│   └── layout/          # Header, Footer, Layout
-├── context/
-│   └── AppContext.tsx   # Global state (⚠️ Core business logic here)
-├── data/
-│   └── mockData.ts      # Demo data (properties, agents, users)
-├── pages/
-│   ├── admin/           # AdminDashboard
-│   ├── agent/           # AgentDashboard, AgentCalendar, AgentSettings
-│   ├── customer/        # CustomerDashboard, CustomerSettings
-│   └── ...              # Public pages
-├── types/
-│   └── index.ts         # TypeScript interfaces
-└── utils/
-    └── helpers.ts       # Utility functions
+real-estate-frontend-pt2/
+├── public/                      # Static assets
+│   └── vite.svg                 # Favicon
+├── src/
+│   ├── components/
+│   │   ├── booking/
+│   │   │   └── BookingModal.tsx # Property viewing booking flow
+│   │   ├── common/              # Reusable UI components (buttons, cards, modals)
+│   │   └── layout/
+│   │       ├── Header.tsx       # Navigation, notifications, user menu
+│   │       ├── Footer.tsx       # Site footer
+│   │       └── Layout.tsx       # Page wrapper component
+│   ├── context/
+│   │   └── AppContext.tsx       # ⚠️ CORE: All business logic & state management
+│   ├── data/
+│   │   └── mockData.ts          # Demo data (properties, agents, users, company info)
+│   ├── pages/
+│   │   ├── admin/
+│   │   │   └── AdminDashboard.tsx    # Admin: all appointments, alerts, overrides
+│   │   ├── agent/
+│   │   │   ├── AgentDashboard.tsx    # Agent: appointments, queues, sold properties
+│   │   │   ├── AgentCalendar.tsx     # Agent: month/day view calendar
+│   │   │   └── AgentSettings.tsx     # Agent: profile, SMS verification
+│   │   ├── customer/
+│   │   │   ├── CustomerDashboard.tsx # Customer: appointments, priority status
+│   │   │   └── CustomerSettings.tsx  # Customer: profile, SMS verification
+│   │   ├── HomePage.tsx              # Public landing page
+│   │   ├── LoginPage.tsx             # Demo role selection
+│   │   ├── PropertiesPage.tsx        # Property listings with filters
+│   │   ├── PropertyDetailPage.tsx    # Single property view, booking trigger
+│   │   └── AboutPage.tsx             # Company info page
+│   ├── types/
+│   │   └── index.ts             # TypeScript interfaces (User, Property, Appointment, etc.)
+│   ├── utils/
+│   │   └── helpers.ts           # Utility functions (date formatting, etc.)
+│   ├── App.tsx                  # Route definitions
+│   ├── main.tsx                 # React entry point
+│   └── index.css                # Tailwind CSS imports
+├── package.json                 # Dependencies & scripts
+├── vite.config.ts               # Vite bundler config
+├── tailwind.config.js           # Tailwind CSS config
+├── tsconfig.json                # TypeScript config
+└── README.md                    # This documentation
+```
+
+### Key Files for Backend Integration
+
+| File | Purpose | Backend Integration Point |
+|------|---------|---------------------------|
+| `src/context/AppContext.tsx` | All business logic | Replace state mutations with API calls |
+| `src/data/mockData.ts` | Sample data | Delete after API integration |
+| `src/types/index.ts` | Type definitions | Match to backend API response types |
+
+---
+
+## 📦 Mock Data Handling
+
+### How Mock Data Works
+
+The application uses React Context to simulate a database. All data is initialized from `src/data/mockData.ts` and stored in component state.
+
+```typescript
+// src/context/AppContext.tsx - State initialization
+const [properties, setProperties] = useState<Property[]>(mockProperties);
+const [agents, setAgents] = useState<Agent[]>(mockAgents);
+const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+```
+
+### Mock Data Entities
+
+| Entity | File Location | Count | Purpose |
+|--------|---------------|-------|---------|
+| Properties | `mockData.ts` | 6 | Sample property listings in Davao City |
+| Agents | `mockData.ts` | 4 | Sample agents with availability |
+| Users | `mockData.ts` | 3 | Customer and admin accounts |
+| Appointments | `mockData.ts` | 0 | Empty - created through booking flow |
+| Notifications | `mockData.ts` | 0 | Empty - generated by actions |
+
+### Resetting Demo State
+
+The demo state resets on page refresh. This is intentional for evaluation purposes. To persist state, integrate with a backend database.
+
+### Modifying Mock Data
+
+To add sample appointments for testing, edit `src/data/mockData.ts`:
+
+```typescript
+export const mockAppointments: Appointment[] = [
+  {
+    id: 'apt-1',
+    propertyId: 'prop-1',
+    customerId: 'customer-1',
+    agentId: 'agent-1',
+    date: '2024-12-15',
+    startTime: '10:00',
+    status: 'pending',
+    hasViewingRights: true,
+    hasPurchaseRights: true,
+    createdAt: new Date().toISOString(),
+  },
+];
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🔮 Future Backend Integration (TODO)
 
-```bash
-npm install
-npm run dev      # Start development server
-npm run build    # Build for production
-npm run lint     # Run linting
+This section outlines how to connect the frontend to a real backend API.
+
+### Step 1: Create API Service Layer
+
+Create `src/services/api.ts` to centralize API calls:
+
+```typescript
+// src/services/api.ts
+const API_BASE = process.env.VITE_API_URL || 'http://localhost:3001/api';
+
+export const propertyService = {
+  getAll: () => fetch(`${API_BASE}/properties`).then(r => r.json()),
+  getById: (id: string) => fetch(`${API_BASE}/properties/${id}`).then(r => r.json()),
+  create: (data: Partial<Property>) => 
+    fetch(`${API_BASE}/properties`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => r.json()),
+  // ... more methods
+};
+
+export const appointmentService = {
+  create: (data: Partial<Appointment>) => 
+    fetch(`${API_BASE}/appointments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => r.json()),
+  accept: (id: string) => 
+    fetch(`${API_BASE}/appointments/${id}/accept`, { method: 'PATCH' }).then(r => r.json()),
+  // ... more methods
+};
 ```
 
-### Demo Login
-- **Customer**: Browse properties and book viewings
-- **Agent**: Manage bookings and availability
-- **Admin**: Access via `/internal/admin/dashboard`
+### Step 2: Update Context to Use API
+
+Replace direct state mutations with API calls in `AppContext.tsx`:
+
+```typescript
+// Before (mock):
+const createAppointment = useCallback((data) => {
+  const newAppointment = { ...data, id: uuidv4() };
+  setAppointments(prev => [...prev, newAppointment]);
+  return newAppointment;
+}, []);
+
+// After (API):
+const createAppointment = useCallback(async (data) => {
+  const newAppointment = await appointmentService.create(data);
+  setAppointments(prev => [...prev, newAppointment]);
+  return newAppointment;
+}, []);
+```
+
+### Step 3: Add Authentication
+
+Replace the demo login with real authentication:
+
+```typescript
+// src/services/auth.ts
+export const authService = {
+  login: (email: string, password: string) =>
+    fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }).then(r => r.json()),
+  
+  logout: () => fetch(`${API_BASE}/auth/logout`, { method: 'POST' }),
+  
+  getCurrentUser: () => 
+    fetch(`${API_BASE}/auth/me`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    }).then(r => r.json()),
+};
+```
+
+### Step 4: Add Real-Time Updates (WebSocket)
+
+For multi-user real-time updates:
+
+```typescript
+// src/services/socket.ts
+import { io } from 'socket.io-client';
+
+export const socket = io(process.env.VITE_WS_URL || 'http://localhost:3001');
+
+socket.on('appointment:created', (appointment) => {
+  // Update local state
+});
+
+socket.on('appointment:updated', (appointment) => {
+  // Update local state
+});
+```
+
+### Backend API Requirements
+
+The fullstack backend should implement these endpoints:
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/properties` | List all available properties |
+| GET | `/api/properties/:id` | Get single property |
+| POST | `/api/properties` | Create property (agent/admin) |
+| PUT | `/api/properties/:id` | Update property |
+| GET | `/api/appointments` | List user's appointments |
+| POST | `/api/appointments` | Create booking |
+| PATCH | `/api/appointments/:id/accept` | Agent accepts |
+| PATCH | `/api/appointments/:id/reject` | Agent rejects |
+| PATCH | `/api/appointments/:id/done` | Mark viewing done |
+| PATCH | `/api/appointments/:id/sold` | Mark property sold |
+| DELETE | `/api/appointments/:id` | Cancel appointment |
+| GET | `/api/agents` | List all agents |
+| GET | `/api/agents/:id/availability` | Get agent availability |
+| POST | `/api/agents/:id/unavailable` | Block time period |
+| POST | `/api/ratings` | Submit agent rating |
+| POST | `/api/auth/login` | User login |
+| POST | `/api/auth/logout` | User logout |
+| GET | `/api/auth/me` | Get current user |
+| POST | `/api/auth/verify-sms` | Verify phone number |
+
+---
+
+## 🚧 Features NOT Yet Implemented
+
+The following features are commonly found in real estate SaaS applications but are **not yet implemented** in this frontend demo:
+
+### 📊 Admin Analytics Dashboard
+- **What**: Charts, graphs, and KPIs for business metrics
+- **Why needed**: Track agent performance, booking trends, revenue
+- **Implementation**: Requires backend data aggregation + chart library (Chart.js, Recharts)
+
+### 📄 Document Upload & Management
+- **What**: Upload contracts, ID verification, property documents
+- **Why needed**: Transaction completion requires legal documents
+- **Implementation**: Requires file storage (AWS S3, Cloudinary) + secure access
+
+### 🗺️ Maps Integration
+- **What**: Property location maps, neighborhood info, nearby amenities
+- **Why needed**: Location is critical for property decisions
+- **Implementation**: Google Maps API or Mapbox + geocoding
+
+### 💰 Mortgage Calculator
+- **What**: Monthly payment estimator, amortization schedule
+- **Why needed**: Helps customers assess affordability
+- **Implementation**: Frontend calculation component
+
+### 🔍 Saved Searches & Favorites
+- **What**: Save search criteria, favorite properties, price alerts
+- **Why needed**: Return visitors want personalized experience
+- **Implementation**: Requires user preferences storage in backend
+
+### 📧 Push/Email Notifications
+- **What**: Real-time push notifications, email summaries
+- **Why needed**: Users need updates when not in app
+- **Implementation**: FCM for push, SendGrid/Mailgun for email
+
+### 👤 Agent Bios & Statistics
+- **What**: Detailed agent profiles, performance stats, specializations
+- **Why needed**: Customers want to choose agents based on expertise
+- **Implementation**: Extended agent profile pages
+
+### ✅ Compliance Tools
+- **What**: KYC verification, anti-money laundering checks, audit logs
+- **Why needed**: Real estate transactions have regulatory requirements
+- **Implementation**: Third-party compliance APIs + audit trail
+
+### 📅 Appointment Rescheduling
+- **What**: Change date/time of existing appointment
+- **Why needed**: Schedules change, cancelling and rebooking is cumbersome
+- **Implementation**: Update endpoint + conflict checking
+
+### 💬 Advanced Messaging
+- **What**: Rich text, attachments, read receipts, typing indicators
+- **Why needed**: Better communication during transaction
+- **Implementation**: WebSocket + message persistence + file upload
+
+### 🏷️ Property Comparison
+- **What**: Side-by-side comparison of multiple properties
+- **Why needed**: Decision support for buyers
+- **Implementation**: Frontend comparison component
+
+### 📱 Mobile App
+- **What**: Native iOS/Android apps
+- **Why needed**: Mobile-first user experience
+- **Implementation**: React Native or Flutter sharing business logic
+
+---
+
+## 🚀 Setup Instructions
+
+### Prerequisites
+
+- Node.js 18+ (LTS recommended)
+- npm 9+ (comes with Node.js)
+- Modern browser (Chrome, Firefox, Safari, Edge)
+
+### Quick Start (Frontend-Only Demo)
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/real-estate-frontend-pt2.git
+cd real-estate-frontend-pt2
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Open in browser
+# http://localhost:5173
+```
+
+### Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server with hot reload |
+| `npm run build` | Build for production (outputs to `dist/`) |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Run ESLint to check code quality |
+
+### Environment Variables (Optional)
+
+For future backend integration, create `.env` file:
+
+```env
+# Backend API (when available)
+VITE_API_URL=http://localhost:3001/api
+
+# WebSocket server (when available)
+VITE_WS_URL=http://localhost:3001
+
+# Feature flags
+VITE_ENABLE_SMS=false
+VITE_ENABLE_ANALYTICS=false
+```
+
+### Demo Login Roles
+
+The demo uses role-based login without passwords:
+
+| Role | Access | Entry Point |
+|------|--------|-------------|
+| **Customer** | Browse, book, manage appointments | `/login` → "Customer" |
+| **Agent** | Manage bookings, calendar, properties | `/login` → "Agent" |
+| **Admin** | System-wide view, overrides | `/internal/admin/dashboard` |
+
+### Building for Production
+
+```bash
+# Create production build
+npm run build
+
+# Preview production build
+npm run preview
+
+# Deploy dist/ folder to your hosting provider
+```
+
+The `dist/` folder contains static files that can be deployed to any static hosting:
+- Netlify, Vercel, GitHub Pages
+- AWS S3 + CloudFront
+- Any web server (nginx, Apache)
+
+### Frontend-Only Operation Notes
+
+⚠️ **Important**: This is a demonstration frontend. Data is stored in browser memory and will reset on page refresh.
+
+**What works without backend:**
+- All UI flows and interactions
+- Property browsing and filtering
+- Booking flow with slot selection
+- Agent accept/reject flow
+- Customer dashboard with appointments
+- Agent calendar and availability
+- Admin dashboard overview
+- Notifications (in-session only)
+
+**What requires backend:**
+- Data persistence across sessions
+- Multi-user real-time updates
+- Actual SMS verification
+- Email notifications
+- File/document uploads
+- Payment processing
 
 ---
 
