@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and select a role (Customer, Agent, or Admin) from the demo login page. No credentials required - this is a frontend demonstration.
+Open the URL shown in terminal (default: `http://localhost:5173`) and select a role (Customer, Agent, or Admin) from the demo login page. No credentials required - this is a frontend demonstration.
 
 ---
 
@@ -1214,7 +1214,7 @@ The following features are commonly found in real estate SaaS applications but a
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/real-estate-frontend-pt2.git
+git clone <repository-url>
 cd real-estate-frontend-pt2
 
 # Install dependencies
@@ -1223,8 +1223,7 @@ npm install
 # Start development server
 npm run dev
 
-# Open in browser
-# http://localhost:5173
+# Open the URL shown in terminal (default: http://localhost:5173)
 ```
 
 ### Available Scripts
