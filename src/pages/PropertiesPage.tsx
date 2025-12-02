@@ -16,10 +16,10 @@ export default function PropertiesPage() {
   // Check if user can add properties (agents and admins only)
   const canAddProperty = currentUser && (currentUser.role === 'agent' || currentUser.role === 'admin');
 
-  // Filter properties - hide sold properties from customer view
+  // Filter properties - hide sold/rented/archived properties from customer view
   const filteredProperties = properties.filter(property => {
-    // Hide sold properties from customers/public view
-    if (isCustomerView && property.status === 'sold') return false;
+    // Hide sold/rented/archived properties from customers/public view
+    if (isCustomerView && (property.status === 'sold' || property.status === 'rented' || property.isArchived)) return false;
     
     // Status filter (only show sold option for agents/admins)
     if (statusFilter !== 'all' && property.status !== statusFilter) return false;

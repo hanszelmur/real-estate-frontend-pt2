@@ -7,7 +7,7 @@ import NotificationItem from '../../components/common/NotificationItem';
 import AppointmentDetailModal from '../../components/common/AppointmentDetailModal';
 import AddPropertyModal from '../../components/common/AddPropertyModal';
 
-type DashboardTab = 'appointments' | 'sold';
+type DashboardTab = 'appointments' | 'sold' | 'archived';
 
 export default function AgentDashboard() {
   const {
@@ -21,6 +21,8 @@ export default function AgentDashboard() {
     markNotificationRead,
     getPurchasePriorityQueue,
     getSoldProperties,
+    archiveProperty,
+    unarchiveProperty,
   } = useApp();
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -52,6 +54,7 @@ export default function AgentDashboard() {
   
   // Get sold properties by this agent
   const soldProperties = getSoldProperties().filter(p => agent.soldProperties.includes(p.id));
+  const archivedProperties = soldProperties.filter(p => p.isArchived);
 
   // Get unique properties with active appointments
   const propertiesWithQueue = [...new Set(appointments
@@ -178,12 +181,29 @@ export default function AgentDashboard() {
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                <span>Sold Properties</span>
-                {soldProperties.length > 0 && (
+                <span>My Sales</span>
+                {soldProperties.filter(p => !p.isArchived).length > 0 && (
                   <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
                     activeTab === 'sold' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {soldProperties.length}
+                    {soldProperties.filter(p => !p.isArchived).length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('archived')}
+                className={`flex-1 py-4 px-4 text-center border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'archived'
+                    ? 'border-gray-500 text-gray-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <span>Archived</span>
+                {archivedProperties.length > 0 && (
+                  <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${
+                    activeTab === 'archived' ? 'bg-gray-100 text-gray-600' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {archivedProperties.length}
                   </span>
                 )}
               </button>
@@ -395,37 +415,141 @@ export default function AgentDashboard() {
               </>
             )}
 
-            {/* Sold Properties Tab Content */}
+            {/* Sold/Rented Properties Tab Content */}
             {activeTab === 'sold' && (
+              <>
+                {/* Sales Statistics */}
+                <div className="bg-white rounded-lg shadow-md mb-6">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-xl font-semibold text-gray-900">My Sales Statistics</h2>
+                  </div>
+                  <div className="p-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <p className="text-sm text-purple-600 font-medium">Total Sales</p>
+                        <p className="text-3xl font-bold text-purple-800 mt-1">{soldProperties.length}</p>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <p className="text-sm text-green-600 font-medium">Total Value</p>
+                        <p className="text-3xl font-bold text-green-800 mt-1">
+                          {formatCurrency(soldProperties.reduce((sum, p) => sum + p.price, 0))}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Properties List */}
+                <div className="bg-white rounded-lg shadow-md">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-xl font-semibold text-gray-900">Sold & Rented Properties</h2>
+                    <p className="text-sm text-gray-500 mt-1">Properties you&apos;ve successfully closed</p>
+                  </div>
+                  <div className="p-6">
+                    {soldProperties.length === 0 ? (
+                      <div className="text-center py-8">
+                        <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <p className="text-gray-500 mb-2">No sold/rented properties yet</p>
+                        <p className="text-sm text-gray-400">Complete viewings and mark properties as sold or rented to see them here.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {soldProperties.filter(p => !p.isArchived).map(property => (
+                          <div key={property.id} className={`border rounded-lg p-4 ${
+                            property.status === 'sold' ? 'bg-purple-50 border-purple-200' : 'bg-orange-50 border-orange-200'
+                          }`}>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-lg text-gray-900">{property.title}</h4>
+                                <p className="text-gray-600 text-sm">{property.address}, {property.city}</p>
+                              </div>
+                              <span className={`px-3 py-1 text-xs rounded-full font-medium ${
+                                property.status === 'sold' 
+                                  ? 'bg-purple-100 text-purple-800' 
+                                  : 'bg-orange-100 text-orange-800'
+                              }`}>
+                                {property.status.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <p className="text-gray-500">Price</p>
+                                <p className="font-medium text-gray-900">{formatCurrency(property.price)}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-500">Bedrooms</p>
+                                <p className="font-medium">{property.bedrooms}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-500">Area</p>
+                                <p className="font-medium">{property.sqft} sqm</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-500">Closed Date</p>
+                                <p className="font-medium">{property.soldDate ? formatDate(property.soldDate) : '-'}</p>
+                              </div>
+                            </div>
+                            {!property.isArchived && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <button
+                                  onClick={() => archiveProperty(property.id)}
+                                  className="text-sm text-gray-600 hover:text-gray-800 flex items-center"
+                                >
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                  </svg>
+                                  Archive
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Archived Properties Tab Content */}
+            {activeTab === 'archived' && (
               <div className="bg-white rounded-lg shadow-md">
                 <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-900">Sold Properties</h2>
-                  <p className="text-sm text-gray-500 mt-1">Properties you&apos;ve successfully sold</p>
+                  <h2 className="text-xl font-semibold text-gray-900">Archived Properties</h2>
+                  <p className="text-sm text-gray-500 mt-1">Properties you&apos;ve archived</p>
                 </div>
                 <div className="p-6">
-                  {soldProperties.length === 0 ? (
+                  {archivedProperties.length === 0 ? (
                     <div className="text-center py-8">
                       <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                       </svg>
-                      <p className="text-gray-500 mb-2">No sold properties yet</p>
-                      <p className="text-sm text-gray-400">Complete viewings and mark properties as sold to see them here.</p>
+                      <p className="text-gray-500 mb-2">No archived properties</p>
+                      <p className="text-sm text-gray-400">Archive sold/rented properties to keep your active list clean.</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {soldProperties.map(property => (
-                        <div key={property.id} className="border rounded-lg p-4 bg-purple-50 border-purple-200">
+                      {archivedProperties.map(property => (
+                        <div key={property.id} className="border rounded-lg p-4 bg-gray-50 border-gray-200">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <h4 className="font-semibold text-lg text-gray-900">{property.title}</h4>
                               <p className="text-gray-600 text-sm">{property.address}, {property.city}</p>
                             </div>
-                            <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">SOLD</span>
+                            <span className={`px-3 py-1 text-xs rounded-full font-medium ${
+                              property.status === 'sold' 
+                                ? 'bg-red-100 text-red-800' 
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {property.status.toUpperCase()}
+                            </span>
                           </div>
-                          <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
+                          <div className="mt-3 grid grid-cols-4 gap-4 text-sm">
                             <div>
                               <p className="text-gray-500">Price</p>
-                              <p className="font-medium text-purple-700">{formatCurrency(property.price)}</p>
+                              <p className="font-medium text-gray-900">{formatCurrency(property.price)}</p>
                             </div>
                             <div>
                               <p className="text-gray-500">Bedrooms</p>
@@ -435,6 +559,21 @@ export default function AgentDashboard() {
                               <p className="text-gray-500">Area</p>
                               <p className="font-medium">{property.sqft} sqm</p>
                             </div>
+                            <div>
+                              <p className="text-gray-500">Closed Date</p>
+                              <p className="font-medium">{property.soldDate ? formatDate(property.soldDate) : '-'}</p>
+                            </div>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <button
+                              onClick={() => unarchiveProperty(property.id)}
+                              className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                              </svg>
+                              Unarchive
+                            </button>
                           </div>
                         </div>
                       ))}

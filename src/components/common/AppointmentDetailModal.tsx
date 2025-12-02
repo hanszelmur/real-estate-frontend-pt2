@@ -33,6 +33,7 @@ export default function AppointmentDetailModal({
     sendMessage,
     markAppointmentDone,
     markAppointmentSold,
+    markPropertySoldOrRented,
   } = useApp();
 
   const [showOverride, setShowOverride] = useState(false);
@@ -104,6 +105,15 @@ export default function AppointmentDetailModal({
   };
 
   const handleMarkSold = () => {
+    if (!property || !currentUser) return;
+    
+    // Determine if this is a rental or sale
+    const status: 'sold' | 'rented' = property.listingType === 'rent' ? 'rented' : 'sold';
+    
+    // Use the new unified function
+    markPropertySoldOrRented(property.id, status, currentUser.id);
+    
+    // Also mark the appointment as sold (using existing function for compatibility)
     markAppointmentSold(appointment.id);
     onClose();
   };
@@ -117,6 +127,7 @@ export default function AppointmentDetailModal({
       case 'completed': return 'bg-gray-100 text-gray-800';
       case 'done': return 'bg-gray-100 text-gray-800';
       case 'sold': return 'bg-purple-100 text-purple-800';
+      case 'rented': return 'bg-orange-100 text-orange-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -511,7 +522,7 @@ export default function AppointmentDetailModal({
                 ) : showSoldConfirm ? (
                   <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
                     <p className="text-sm text-purple-700 mb-3">
-                      Mark this property as sold? The property will be removed from listings 
+                      Mark this property as {property?.listingType === 'rent' ? 'rented' : 'sold'}? The property will be removed from listings 
                       and all other pending viewings will be cancelled.
                     </p>
                     <div className="flex space-x-2">
@@ -525,7 +536,7 @@ export default function AppointmentDetailModal({
                         onClick={handleMarkSold}
                         className="flex-1 px-3 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
                       >
-                        Confirm Sale
+                        Confirm {property?.listingType === 'rent' ? 'Rental' : 'Sale'}
                       </button>
                     </div>
                   </div>
@@ -541,7 +552,7 @@ export default function AppointmentDetailModal({
                       onClick={() => setShowSoldConfirm(true)}
                       className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
                     >
-                      Mark as Sold
+                      Mark as {property?.listingType === 'rent' ? 'Rented' : 'Sold'}
                     </button>
                   </div>
                 )}
