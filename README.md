@@ -47,6 +47,9 @@ Open the URL shown in terminal (default: `http://localhost:5173`) and select a r
 - [Future Backend Integration (TODO)](#-future-backend-integration-todo)
 - [Features NOT Yet Implemented](#-features-not-yet-implemented)
 - [Setup Instructions](#-setup-instructions)
+- [Dependencies](#-dependencies)
+- [Troubleshooting](#-troubleshooting)
+- [UX Critique & Improvement Suggestions](#-ux-critique--improvement-suggestions)
 - [Extending & Modifying](#-how-to-extendmodify)
 - [Developer Warnings](#-developer--ai-warnings)
 - [Changelog](#-changelog--whats-new)
@@ -140,7 +143,9 @@ These features are NOT available in the frontend demo and require backend:
 
 All screenshots are current as of the latest release. Each image is annotated with its context, showing the features available in each view.
 
-> **Note:** Screenshots may not include all features. To experience all interactive elements, run the demo locally with `npm run dev`.
+> **Note:** Screenshots are hosted on GitHub and embedded via URLs. They demonstrate actual UI states with data populated. To experience all interactive elements and workflows, run the demo locally with `npm run dev`.
+
+> **For Developers:** When updating screenshots, capture new images from the running application, upload to GitHub (via PR attachments or issue comments), and update the image URLs in this README. See INSTRUCTIONS.md for screenshot reference guide and workflow documentation.
 
 ### 🏠 Home Page
 **Route:** `/` (public)  
@@ -1264,15 +1269,15 @@ The following features are commonly found in real estate SaaS applications but a
 
 ### Prerequisites
 
-- Node.js 18+ (LTS recommended)
-- npm 9+ (comes with Node.js)
+- Node.js v18+ (check: `node --version`)
+- npm v9+ (check: `npm --version`)
 - Modern browser (Chrome, Firefox, Safari, Edge)
 
-### Quick Start (Frontend-Only Demo)
+### First-Time Setup
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/hanszelmur/real-estate-frontend-pt2.git
 cd real-estate-frontend-pt2
 
 # Install dependencies
@@ -1281,7 +1286,27 @@ npm install
 # Start development server
 npm run dev
 
-# Open the URL shown in terminal (default: http://localhost:5173)
+# Open browser to http://localhost:5173
+```
+
+### Returning Users
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Install any new dependencies
+npm install
+
+# Start dev server
+npm run dev
+```
+
+### Build for Production
+
+```bash
+npm run build
+# Output in dist/ directory
 ```
 
 ### Available Scripts
@@ -1335,6 +1360,301 @@ The `dist/` folder contains static files that can be deployed to any static host
 - Netlify, Vercel, GitHub Pages
 - AWS S3 + CloudFront
 - Any web server (nginx, Apache)
+
+---
+
+## 📦 Dependencies
+
+This project uses the following main dependencies:
+
+### Core Libraries
+
+| Dependency | Version | Description |
+|------------|---------|-------------|
+| **React** | ^19.2.0 | Core UI library for building user interfaces |
+| **React DOM** | ^19.2.0 | React renderer for web applications |
+| **React Router DOM** | ^7.1.1 | Declarative routing for React applications |
+| **TypeScript** | ~5.9.3 | Static type checking and enhanced IDE support |
+
+### Build Tools
+
+| Dependency | Version | Description |
+|------------|---------|-------------|
+| **Vite** | ^7.2.4 | Fast build tool and dev server with HMR |
+| **@vitejs/plugin-react** | ^5.1.1 | Official Vite plugin for React with Fast Refresh |
+
+### Styling
+
+| Dependency | Version | Description |
+|------------|---------|-------------|
+| **Tailwind CSS** | ^3.4.17 | Utility-first CSS framework for rapid UI development |
+| **PostCSS** | ^8.5.3 | CSS transformation tool (required for Tailwind) |
+| **Autoprefixer** | ^10.4.21 | Adds vendor prefixes automatically |
+
+### Utilities
+
+| Dependency | Version | Description |
+|------------|---------|-------------|
+| **date-fns** | ^4.1.0 | Modern JavaScript date utility library |
+| **uuid** | ^11.0.4 | UUID generation for unique identifiers |
+
+### Development Tools
+
+| Dependency | Version | Description |
+|------------|---------|-------------|
+| **ESLint** | ^9.39.1 | Code linting and quality checks |
+| **TypeScript ESLint** | ^8.46.4 | TypeScript-specific linting rules |
+| **eslint-plugin-react-hooks** | ^7.0.1 | ESLint rules for React Hooks |
+
+> **Note**: Lucide React icons are not currently a dependency but Tailwind provides basic icon support. For enhanced iconography, consider adding `lucide-react` in future iterations.
+
+---
+
+## 🔧 Troubleshooting
+
+Common issues and their solutions when running the application.
+
+### Port Already in Use
+
+**Problem:** `Port 5173 is already in use`
+
+**Solution:**
+```bash
+# Mac/Linux:
+lsof -ti:5173 | xargs kill -9
+
+# Windows:
+netstat -ano | findstr :5173
+taskkill /PID <PID> /F
+
+# Or use a different port:
+npm run dev -- --port 3000
+```
+
+### Image Upload Preview Not Working
+
+**Problem:** Images don't preview after upload
+
+**Solution:** This is a frontend-only demo. Images are stored as base64 data URLs in memory. Ensure:
+- File size < 5MB
+- Supported formats: JPG, PNG, GIF, WebP
+- Browser localStorage not full
+- Try clearing browser cache if issues persist
+
+### Blank Screen After Login
+
+**Problem:** White screen after selecting role
+
+**Solution:**
+- Check browser console for errors (F12 or Cmd+Option+I)
+- Clear browser cache and localStorage:
+  ```javascript
+  // In browser console:
+  localStorage.clear();
+  sessionStorage.clear();
+  location.reload();
+  ```
+- Ensure React Router is working (check URL changes)
+- Verify no JavaScript errors in console
+
+### Data Lost After Refresh
+
+**Problem:** All data disappears when page refreshes
+
+**Expected Behavior:** This is normal for the frontend-only demo. The application uses in-memory React Context state that resets on page refresh. This is intentional to demonstrate UI/UX without backend infrastructure.
+
+**For Persistence:** Integrate with the fullstack backend at `hanszelmur/real-estate-fullstack` for data persistence across sessions.
+
+### Build Fails
+
+**Problem:** `npm run build` fails with TypeScript or Vite errors
+
+**Solution:**
+```bash
+# Clear node_modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
+
+# Check for TypeScript errors specifically
+npx tsc --noEmit
+
+# If issues persist, check Node.js version
+node --version  # Should be v18+
+```
+
+### External Images Not Loading (Unsplash)
+
+**Problem:** Property images from Unsplash CDN not displaying
+
+**Solution:** 
+- Check internet connection
+- Verify no browser extensions blocking external images (ad blockers)
+- Check browser console for CORS or CSP errors
+- Images are hotlinked from Unsplash - if unavailable, they may have been removed
+
+### Slow Development Server
+
+**Problem:** `npm run dev` is slow or unresponsive
+
+**Solution:**
+```bash
+# Clear Vite cache
+rm -rf node_modules/.vite
+
+# Restart dev server
+npm run dev
+```
+
+### SMS Verification Not Working
+
+**Problem:** Cannot verify phone number
+
+**Expected Behavior:** This is a demo feature. ANY 6-digit code will verify the phone number. This is intentional for testing purposes. Real SMS verification requires integration with an SMS provider like Twilio.
+
+---
+
+## 🎨 UX Critique & Improvement Suggestions
+
+Comprehensive analysis of user experience across all roles with actionable improvement recommendations.
+
+### Customer Experience
+
+**✅ Strengths:**
+- Clear property browsing interface with intuitive filters (status, price range, bedrooms)
+- Visual booking flow with agent selection and time slot picker
+- Real-time priority queue display showing position in purchase line
+- SMS verification status clearly indicated in settings
+- Clean appointment dashboard with status-based tabs (All, Accepted, Pending, Rejected)
+- Property detail pages with image galleries showing multiple photos
+
+**⚠️ Issues Identified:**
+
+1. **No Search Functionality**
+   - **Impact:** Users can only filter by predefined categories, not search by keywords, location details, or specific features
+   - **Severity:** High - Reduces discoverability of properties
+
+2. **No Favorites/Saved Properties**
+   - **Impact:** Cannot bookmark properties for later review or comparison
+   - **Severity:** Medium - Forces users to remember or manually note properties of interest
+
+3. **No Appointment History Export**
+   - **Impact:** Cannot download appointment records for personal records or tax purposes
+   - **Severity:** Low - Workaround exists (screenshots), but unprofessional
+
+4. **Limited Property Comparison**
+   - **Impact:** No side-by-side comparison feature to evaluate multiple properties
+   - **Severity:** Medium - Users must manually compare by switching between tabs
+
+5. **No Mobile Responsiveness**
+   - **Impact:** Layout breaks on smaller screens, poor mobile experience
+   - **Severity:** Critical - Modern users expect mobile-first design
+
+6. **No Property Map View**
+   - **Impact:** Cannot see properties on a map or evaluate neighborhood context
+   - **Severity:** Medium - Location is critical for real estate decisions
+
+**💡 Suggested Improvements:**
+- Add full-text search with auto-suggest across property titles, descriptions, and features
+- Implement favorite/watchlist feature with heart icon on property cards
+- Add "Export Appointments" button (CSV/PDF) on customer dashboard
+- Create property comparison tool allowing up to 3 properties side-by-side
+- Optimize for mobile/tablet viewports using responsive Tailwind breakpoints
+- Integrate Google Maps API or Mapbox for property location visualization
+- Add property alerts/notifications for price changes or new matching listings
+
+### Agent Experience
+
+**✅ Strengths:**
+- Clear appointment queue management with accept/reject actions
+- Vacation mode toggle for temporarily disabling availability
+- Calendar with full month view and detailed day view
+- Property add/edit functionality directly from UI (no admin dependency)
+- Purchase priority queue tables showing customer order by booking timestamp
+- Agent rating display with recent reviews from customers
+- Visual distinction between appointment statuses (pending, accepted, done, sold)
+
+**⚠️ Issues Identified:**
+
+1. **No Bulk Actions**
+   - **Impact:** Cannot accept/reject multiple appointments simultaneously
+   - **Severity:** Medium - Time-consuming when handling many requests
+
+2. **No Revenue Dashboard**
+   - **Impact:** Cannot see total sales, commissions, or performance metrics
+   - **Severity:** High - Essential for tracking professional performance
+
+3. **No Customer Notes**
+   - **Impact:** Cannot add private notes about customer preferences or interactions
+   - **Severity:** Medium - Reduces ability to provide personalized service
+
+4. **No Availability Templates**
+   - **Impact:** Must manually set unavailable periods each time
+   - **Severity:** Low - One-time setup per week, but repetitive
+
+5. **No Notification Preferences**
+   - **Impact:** Cannot customize which alerts to receive (e.g., mute weekend notifications)
+   - **Severity:** Low - May lead to notification fatigue
+
+6. **No Lead Management**
+   - **Impact:** No way to track or follow up with potential customers
+   - **Severity:** Medium - Missed opportunities for conversion
+
+**💡 Suggested Improvements:**
+- Add bulk appointment actions with checkboxes and "Accept All" / "Reject All" buttons
+- Create analytics dashboard showing sales trends, commission totals, top properties, and conversion rates
+- Add customer relationship notes (private to agent) with rich text editor
+- Allow saving availability templates (e.g., "Standard Week", "Holiday Schedule") for quick reuse
+- Add notification settings page with granular controls (email, in-app, SMS preferences)
+- Implement lead tracking system with status pipeline (new, contacted, qualified, converted)
+- Add appointment reminder automation with SMS/email 24 hours before viewing
+
+### Admin Experience
+
+**✅ Strengths:**
+- Full system oversight across all agents and customers
+- Manual override capabilities for appointment reassignment
+- Sold properties tracking with sale prices and agent attribution
+- Purchase queue visibility across all properties
+- Ability to add properties (same as agents)
+- System-wide notifications and alerts
+
+**⚠️ Issues Identified:**
+
+1. **No User Management**
+   - **Impact:** Cannot add, edit, deactivate, or manage user accounts
+   - **Severity:** Critical - Core admin functionality missing
+
+2. **No Reports/Analytics**
+   - **Impact:** No system-wide metrics, charts, or KPIs for business insights
+   - **Severity:** High - Cannot track business performance or make data-driven decisions
+
+3. **No Audit Trail**
+   - **Impact:** Cannot see who changed what and when (critical for compliance)
+   - **Severity:** High - Security and accountability concern
+
+4. **No Property Approval Workflow**
+   - **Impact:** Agents can add properties without admin review or quality check
+   - **Severity:** Medium - Risk of low-quality or fraudulent listings
+
+5. **No Bulk Operations**
+   - **Impact:** Cannot mass-update properties, reassign agents, or change statuses efficiently
+   - **Severity:** Medium - Time-consuming administrative tasks
+
+6. **No System Configuration**
+   - **Impact:** Cannot modify booking window, buffer times, or business rules from UI
+   - **Severity:** Low - Currently requires code changes for configuration
+
+**💡 Suggested Improvements:**
+- Add comprehensive user CRUD interface with role management (customer, agent, admin)
+- Create analytics dashboard with charts (Chart.js or Recharts): bookings over time, revenue by agent, property performance
+- Implement audit log viewer showing all data changes with timestamps, users, and before/after values
+- Add property approval queue where new listings await admin review before going live
+- Add bulk edit tools: select multiple properties → assign agent, change status, update prices
+- Create system settings page for configuring business rules (booking window days, buffer hours, commission rates)
+- Add agent performance reports with downloadable PDFs for review meetings
+- Implement role-based permissions matrix for fine-grained access control
+
+---
 
 ### Frontend-Only Operation Notes
 
