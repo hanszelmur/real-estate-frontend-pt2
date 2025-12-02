@@ -27,15 +27,20 @@ export interface Property {
   sqft: number;
   imageUrl: string; // Primary/legacy image URL
   imageUrls?: string[]; // Array of image URLs for gallery (runtime-uploaded or external URLs)
-  status: 'available' | 'pending' | 'sold';
+  status: 'available' | 'pending' | 'sold' | 'rented';
   features: string[];
   // Race logic: first customer to complete viewing has purchase rights
   firstViewerCustomerId?: string;
   firstViewerTimestamp?: string;
-  // Sold property tracking
+  // Sold/Rented property tracking
   salePrice?: number; // Final sale price (for reference only)
-  soldDate?: string; // ISO date when property was sold
-  soldByAgentId?: string; // Agent who sold the property
+  soldDate?: string; // ISO date when property was sold/rented
+  soldBy?: string; // User ID of agent who sold/rented the property
+  soldByAgentId?: string; // Legacy - Agent who sold the property (use soldBy instead)
+  // Archive functionality
+  isArchived?: boolean; // Whether property is archived
+  // Listing type to determine sold vs rented
+  listingType?: 'sale' | 'rent'; // Type of listing
   // Agent assignment for property management
   assignedAgentId?: string; // Primary agent assigned to this property
   // Exclusive viewing mode - only one customer per start time when enabled
