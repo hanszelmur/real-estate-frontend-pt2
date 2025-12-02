@@ -84,7 +84,7 @@ interface AppContextType {
   isSlotHighDemand: (propertyId: string, agentId: string, date: string, startTime: string) => boolean;
   getSlotBookingCount: (propertyId: string, agentId: string, date: string, startTime: string) => number;
   checkSecondsAvailability: (agentId: string, date: string, startTime: string) => { available: boolean; contention: boolean; waitlistSize: number };
-  hasCustomerRatedAppointment: (appointmentId: string, customerId: string) => boolean;
+  hasCustomerRatedAppointment: (appointmentId: string) => boolean;
 
   // Reminder functions
   getUpcomingAppointments: (userId: string, role: UserRole, hoursAhead?: number) => Appointment[];
@@ -994,7 +994,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [agents, appointments]);
 
   // Check if a customer has already rated an appointment (duplicate prevention)
-  const hasCustomerRatedAppointment = useCallback((appointmentId: string, _customerId: string): boolean => {
+  const hasCustomerRatedAppointment = useCallback((appointmentId: string): boolean => {
     const appointment = appointments.find(a => a.id === appointmentId);
     if (!appointment) return false;
     

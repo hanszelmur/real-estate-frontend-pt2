@@ -14,3 +14,46 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* Property Lifecycle Status Badges */
+@layer components {
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge.sold {
+    @apply bg-red-600 text-white;
+  }
+
+  .badge.rented {
+    @apply bg-orange-600 text-white;
+  }
+
+  .badge.available {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .badge.pending {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  /* Property unavailable state */
+  .property-unavailable {
+    background: linear-gradient(135deg, #fee2e2 0%, #fef3c7 100%);
+    border: 2px solid #dc2626;
+    padding: 2rem;
+    border-radius: 0.5rem;
+  }
+
+  /* Property card sold/rented overlay styles */
+  .property-card.sold,
+  .property-card.rented {
+    @apply relative;
+  }
+
+  .property-card.sold::after,
+  .property-card.rented::after {
+    content: '';
+    @apply absolute inset-0 bg-black bg-opacity-30 pointer-events-none;
+  }
+}
