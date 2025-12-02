@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Screenshots (using GitHub-hosted URLs instead)
+screenshots/
