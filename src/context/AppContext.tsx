@@ -22,8 +22,12 @@ interface AppContextType {
   addProperty: (property: Omit<Property, 'id'>) => Property;
   updateProperty: (id: string, updates: Partial<Property>) => void;
   markPropertySold: (id: string, salePrice: number, agentId: string) => void;
+  markPropertySoldOrRented: (id: string, status: 'sold' | 'rented', agentId: string) => void;
   getSoldProperties: () => Property[];
   togglePropertyExclusive: (propertyId: string) => void;
+  cancelAppointmentsForProperty: (propertyId: string) => void;
+  archiveProperty: (propertyId: string) => void;
+  unarchiveProperty: (propertyId: string) => void;
 
   // Agents
   agents: Agent[];
@@ -202,9 +206,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
   }, []);
 
+  // Mark a property as sold or rented (new unified function)
+  const markPropertySoldOrRented = useCallback((id: string, status: 'sold' | 'rented', agentId: string) => {
+    const property = properties.find(p => p.id === id);
+    
+    setProperties(prev => prev.map(p => 
+      p.id === id 
+        ? { 
+            ...p, 
+            status,
+            soldDate: new Date().toISOString(),
+            soldBy: agentId,
+            soldByAgentId: agentId // Keep legacy field for backward compatibility
+          } 
+        : p
+    ));
+    
+    // Update agent's sales count
+    setAgents(prev => prev.map(a => 
+      a.id === agentId 
+        ? { 
+            ...a, 
+            salesCount: a.salesCount + 1,
+            soldProperties: [...a.soldProperties, id]
+          } 
+        : a
+    ));
+
+    // Cancel all pending appointments for this property and notify customers
+    setAppointments(prev => {
+      const affectedAppointments: Appointment[] = [];
+      const updated = prev.map(appt => {
+        if (appt.propertyId === id && !['completed', 'cancelled', 'done', 'sold'].includes(appt.status)) {
+          affectedAppointments.push(appt);
+          return { ...appt, status: 'cancelled' as const };
+        }
+        return appt;
+      });
+
+      // Notify affected customers
+      affectedAppointments.forEach(appt => {
+        setNotifications(prevNotif => [...prevNotif, {
+          id: uuidv4(),
+          userId: appt.customerId,
+          type: 'appointment_cancelled',
+          title: 'Appointment Cancelled',
+          message: `Your viewing for ${property?.title || 'a property'} has been cancelled because the property is no longer available.`,
+          read: false,
+          relatedId: appt.id,
+          createdAt: new Date().toISOString(),
+        }]);
+      });
+
+      return updated;
+    });
+  }, [properties]);
+
+  // Cancel all appointments for a property
+  const cancelAppointmentsForProperty = useCallback((propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    const affectedAppointments: Appointment[] = [];
+    
+    setAppointments(prev => prev.map(appt => {
+      if (appt.propertyId === propertyId && !['completed', 'cancelled', 'done', 'sold'].includes(appt.status)) {
+        affectedAppointments.push(appt);
+        return { ...appt, status: 'cancelled' as const };
+      }
+      return appt;
+    }));
+
+    // Notify affected customers after state update
+    affectedAppointments.forEach(appt => {
+      setNotifications(prev => [...prev, {
+        id: uuidv4(),
+        userId: appt.customerId,
+        type: 'appointment_cancelled',
+        title: 'Appointment Cancelled',
+        message: `Your viewing for ${property?.title || 'a property'} has been cancelled because the property is no longer available.`,
+        read: false,
+        relatedId: appt.id,
+        createdAt: new Date().toISOString(),
+      }]);
+    });
+  }, [properties]);
+
+  // Archive a property
+  const archiveProperty = useCallback((propertyId: string) => {
+    setProperties(prev => prev.map(p => 
+      p.id === propertyId ? { ...p, isArchived: true } : p
+    ));
+  }, []);
+
+  // Unarchive a property
+  const unarchiveProperty = useCallback((propertyId: string) => {
+    setProperties(prev => prev.map(p => 
+      p.id === propertyId ? { ...p, isArchived: false } : p
+    ));
+  }, []);
+
   // Get all sold properties
   const getSoldProperties = useCallback(() => {
-    return properties.filter(p => p.status === 'sold');
+    return properties.filter(p => p.status === 'sold' || p.status === 'rented');
   }, [properties]);
 
   // Toggle property exclusive mode
@@ -1449,7 +1551,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Get properties available for customer booking (excludes sold properties)
   const getAvailablePropertiesForBooking = useCallback(() => {
-    return properties.filter(p => p.status !== 'sold');
+    return properties.filter(p => p.status !== 'sold' && p.status !== 'rented');
   }, [properties]);
 
   // Check if property has pending viewings that haven't been marked done
@@ -1472,8 +1574,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addProperty,
     updateProperty,
     markPropertySold,
+    markPropertySoldOrRented,
     getSoldProperties,
     togglePropertyExclusive,
+    cancelAppointmentsForProperty,
+    archiveProperty,
+    unarchiveProperty,
     agents,
     getAgent,
     getAvailableAgents,

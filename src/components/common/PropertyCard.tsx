@@ -23,6 +23,7 @@ export default function PropertyCard({ property }: PropertyCardProps) {
     available: 'bg-green-100 text-green-800',
     pending: 'bg-yellow-100 text-yellow-800',
     sold: 'bg-red-100 text-red-800',
+    rented: 'bg-orange-100 text-orange-800',
   };
 
   const handleEditClick = (e: React.MouseEvent) => {
@@ -46,6 +47,23 @@ export default function PropertyCard({ property }: PropertyCardProps) {
             >
               {property.status}
             </span>
+            
+            {/* SOLD/RENTED Badge Overlay */}
+            {property.status === 'sold' && (
+              <div className="absolute top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <div className="bg-red-600 text-white px-6 py-3 rounded-lg text-2xl font-bold transform -rotate-12">
+                  SOLD
+                </div>
+              </div>
+            )}
+            
+            {property.status === 'rented' && (
+              <div className="absolute top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <div className="bg-orange-600 text-white px-6 py-3 rounded-lg text-2xl font-bold transform -rotate-12">
+                  RENTED
+                </div>
+              </div>
+            )}
           </div>
           <div className="p-4">
             <h3 className="font-semibold text-lg text-gray-900 mb-1">

@@ -51,6 +51,7 @@ export default function PropertyDetailPage() {
     available: 'bg-green-100 text-green-800',
     pending: 'bg-yellow-100 text-yellow-800',
     sold: 'bg-red-100 text-red-800',
+    rented: 'bg-orange-100 text-orange-800',
   };
 
   return (
@@ -133,9 +134,16 @@ export default function PropertyDetailPage() {
 
               {/* Booking CTA */}
               <div className="mt-6 lg:mt-0 lg:ml-8">
-                {property.status === 'sold' ? (
-                  <div className="text-center p-4 bg-gray-100 rounded-lg">
-                    <p className="text-gray-600 font-medium">This property has been sold</p>
+                {property.status === 'sold' || property.status === 'rented' ? (
+                  <div className="bg-gray-100 border border-gray-300 rounded-lg p-6 text-center">
+                    <span className={`inline-block px-4 py-2 rounded-full text-white font-bold mb-3 ${
+                      property.status === 'sold' ? 'bg-red-600' : 'bg-orange-600'
+                    }`}>
+                      {property.status === 'sold' ? 'SOLD' : 'RENTED'}
+                    </span>
+                    <p className="text-gray-600">
+                      This property is no longer available for viewing.
+                    </p>
                   </div>
                 ) : currentUser ? (
                   currentUser.role === 'customer' ? (
